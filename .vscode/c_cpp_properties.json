@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "STM32",
+            "includePath": [
+                "${workspaceFolder}/Core/Inc",
+                "${workspaceFolder}/Drivers/STM32G4xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32G4xx/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Include",
+                "${workspaceFolder}",
+                "${workspaceFolder}/UserDrivers/ModbusSS",
+                "${workspaceFolder}/UserDrivers/BSP",
+                "${workspaceFolder}/App",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32G4xx/Include",
+                "${workspaceFolder}/UserDrivers/DSP",
+                "${workspaceFolder}/UserDrivers/FlashSaver",
+                "${workspaceFolder}/UserDrivers/FFT"
+            ],
+            "defines": [
+                "STM32G474xx",
+                "USE_HAL_DRIVER"
+            ],
+            "compilerPath": "${execPath}\\..\\..\\VsCodeStmTools\\arm-none-eabi-gcc\\12.2.1-1.2.1\\.content\\bin\\ARM-NONE-EABI-GCC.EXE",
+            "intelliSenseMode": "gcc-arm"
+        }
+    ],
+    "version": 4
+}

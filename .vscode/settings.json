@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "main.h": "c",
+        "tim.h": "c",
+        "stm32f4xx_ll_system.h": "c",
+        "stm32f4xx_hal.h": "c",
+        "stm32f4xx_hal_conf.h": "c"
+    }
+
+
+}

@@ -1,0 +1,22 @@
+{
+    
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "OpenOCD",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build_BUTOMA_PCH400/BUTOMA_PCH400.elf",
+            "svdFile": "${workspaceFolder}/STM32G474xx.svd",
+            "request": "launch",
+            "type": "cortex-debug",
+            "runToEntryPoint": "main",
+            "servertype": "openocd",
+            //"showDevDebugOutput": "raw",
+            "configFiles": [
+                "${workspaceFolder}/stlink.cfg",
+                "${workspaceFolder}/stm32g4x.cfg"
+            ],
+            "preLaunchTask": "Build"
+        }
+    ]
+}

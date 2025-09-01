@@ -1,0 +1,67 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "shell",
+            "dependsOn": [
+                "cmdCopyFromCubeMX"
+            ],
+            "command": "make",
+            "args": [
+                "-f",
+                 "Make",
+                "-j8",
+                "-s",
+                "all"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "-f",
+                 "Make",
+                "clean"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Flash",
+            "type": "shell",
+            "command": "make",
+            "dependsOn": [
+                "Build"
+            ],
+            "args": [
+                "flash",
+                "-f",
+                "Make"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "cmdCopyFromCubeMX",
+            "type": "shell",
+            "command": "${workspaceRoot}/.vscode/cmdCopyFromCubeMX.cmd",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

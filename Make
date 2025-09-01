@@ -1,0 +1,48 @@
+include BaseModule.mk
+
+TARGET:=BUTOMA_PCH400
+BUILD_DIR:=build_${TARGET}
+
+#Makefile name
+MAKE_FILE_NAME=$(firstword $(MAKEFILE_LIST))
+
+# ---------------------------------------------------------------------------------
+#######################################
+# OBJECTS
+#######################################
+OBJECTS_C=$(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
+vpath %.c $(sort $(dir $(C_SOURCES)))
+
+OBJECTS_ASM=$(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
+vpath %.s $(sort $(dir $(ASM_SOURCES)))
+
+.PHONY: all
+
+all: $(BUILD_DIR)/$(TARGET).elf $(HEX_DIR)
+	$(CP) -O ihex $(BUILD_DIR)/$(TARGET).elf $(HEX_DIR)/$(TARGET).hex
+
+# Линкуем все объекты и генерим ELF
+# Затем выводим размрер прошивки
+$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS_C) $(OBJECTS_ASM) $(MAKE_FILE_NAME)
+	$(call dbgMsg1)
+	$(LD) $(OBJECTS_ASM) $(OBJECTS_C) $(LDFLAGS) -o $@
+	$(SZ) $@ --format=berkeley --totals
+	$(call dbgEnd)
+
+$(BUILD_DIR)/%.o: %.c $(MAKE_FILE_NAME) | $(BUILD_DIR)
+	echo "    C    " $@
+	$(GCC) -c $(C_FLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@ -c
+
+$(BUILD_DIR)/%.o: %.s $(MAKE_FILE_NAME) | $(BUILD_DIR)
+	echo "   ASM   " $@
+	$(GCC) -c $(ASM_FLAGS) $< -o $@
+
+ #  $@ - имя цели
+$(BUILD_DIR):
+	echo create path $@
+	mkdir $@
+
+#######################################
+# dependencies
+#######################################
+-include $(wildcard $(BUILD_DIR)/*.d)
