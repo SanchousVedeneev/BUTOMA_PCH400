@@ -20,13 +20,7 @@ __STATIC_INLINE uint8_t Program_setError(Program_ERROR_typedef error);
 __STATIC_INLINE void setPhasePWM(Program_PHASE_typedef *phase, float value);
 __STATIC_INLINE float saturate(float in, float min, float max);
 
-
-
-#define SET_PWM_STEP_UP(IDX,VALUE_1000) bsp_pwm_set_ccrPercentX10((IDX), 1000.0f - (VALUE_1000))
-#define SET_PWM_STEP_DOWN(IDX,VALUE_1000) bsp_pwm_set_ccrPercentX10((IDX), (VALUE_1000))
-#define SET_PWM(IDX,VALUE_1000)           bsp_pwm_set_ccrPercentX10((IDX), (VALUE_1000))
-
-
+#define SET_PWM(IDX, VALUE_1000)  bsp_pwm_set_ccrPercentX10((IDX), (VALUE_1000));
 /*----------------------------- PRIVATE FCN MACRO END ---------------------------------*/
 
 // --------------------- EXTERN ---------------------//
@@ -88,6 +82,7 @@ for (uint8_t i = 0; i < 24; i++)
 __STATIC_INLINE void __stepDebug()
 {
     static uint16_t cnt_led = 0;
+    float kMod = 0.0f;    
 
 //-----------------------  LED BLINK -----------------------
     if(((cnt_led++)%100)==0){
@@ -102,13 +97,12 @@ __STATIC_INLINE void __stepDebug()
 
     Program_pwmOutsControl(bsp_pwm_outs_group_123, programStruct.control.remote.pwmEnable123);
     Program_pwmOutsControl(bsp_pwm_outs_group_456, programStruct.control.remote.pwmEnable456);
-
-    // SET_PWM_STEP_UP(0,programStruct.control.remote.pwmArray[0]);
-    // SET_PWM_STEP_UP(1,programStruct.control.remote.pwmArray[1]);
-    // SET_PWM_STEP_UP(2,programStruct.control.remote.pwmArray[2]);
-    // SET_PWM_STEP_DOWN(3,programStruct.control.remote.pwmArray[3]);
-    // SET_PWM_STEP_UP(4,programStruct.control.remote.pwmArray[4]);
-    // SET_PWM_STEP_DOWN(5,programStruct.control.remote.pwmArray[5]);
+    kMod = saturate(programStruct.control.remote.k_modIn, 0.0f, 1.0f);
+    //float tmp = rateLimitter(kMod, 1.0f, 0);
+    for (int phase = 0; phase < programStruct.setupParam.phaseCount; phase++)
+    {
+        programStruct.phase[phase].k_modOut = kMod;
+    }
 
 //---------------- переключатель
     switch (programStruct.control.target)
@@ -197,9 +191,7 @@ void Program_start()
     bsp_cordic_init();
     Program_sinBuf_init();
     Program_phase_init();
-    Program_get_arr_HRTTIM();
     
-
     asm("NOP");
     Program_switchTarget(target_waitOp);
 }
@@ -245,11 +237,6 @@ void Program_phase_init()
     programStruct.phase[PROGRAM_FHASE_W].voltageFb = &programStruct.analog.aIn[prg_analog_U_w].value;
 
     return;
-}
-
-void Program_get_arr_HRTTIM()
-{
-    programStruct.setupParam.arrVal = LL_HRTIM_TIM_GetPeriod(HRTIM1, BSP_PWM_TIM_PWM_1);
 }
 
 __STATIC_INLINE void Program_setDout(Program_dout_typedef dout){
@@ -368,6 +355,26 @@ __INLINE uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc
         return 1;
     }
     return 0;
+}
+
+#define PROGRAM_KMOD_MDB_MAX (990)
+#define PROGRAM_KMOD_MDB_MIN (0)
+__INLINE void Program_set_k_mod_debug (uint16_t kMod_mdb)
+{
+    if (kMod_mdb > PROGRAM_KMOD_MDB_MAX)
+    {
+        kMod_mdb = PROGRAM_KMOD_MDB_MAX;
+    }
+    else if (kMod_mdb < 0)
+    {
+        kMod_mdb = 0;
+    }
+    
+    for (int phase = 0; phase < programStruct.setupParam.phaseCount; phase++)
+    {
+        programStruct.control.remote.k_modIn = ((float)kMod_mdb)/1000.0f;
+    }
+    return;
 }
 
 __INLINE uint8_t Program_GoReset()
@@ -496,141 +503,62 @@ __STATIC_INLINE void Program_pwmInit()
 
     for (uint8_t i = 0; i < 6; i++)
     {
-        SET_PWM(i, 0.0f);
+        SET_PWM(i, 500.0f);
     }
 
     bsp_pwm_start_IRQ_123_IRQ_456();
 }
 
-__STATIC_INLINE void Program_regulatorInit(){
-
-//--------------------  VODOROD -----------------------//
-//--------------------  REG U -----------------------//
-    // programStruct.control.sau.vodorod_RegU.k_Int = programStruct.setupParam.vodorod_RegU_ki;
-    // programStruct.control.sau.vodorod_RegU.k_P = programStruct.setupParam.vodorod_RegU_kp;
-    // programStruct.control.sau.vodorod_RegU.period = 0.00025f;
-
-    // programStruct.control.sau.vodorod_RegU.IntMin = 0.0f;
-    // programStruct.control.sau.vodorod_RegU.IntMax = programStruct.setupParam.vodorod_RegU_MAX;
-    // programStruct.control.sau.vodorod_RegU.OutMin = 0.0f;
-    // programStruct.control.sau.vodorod_RegU.OutMax = programStruct.setupParam.vodorod_RegU_MAX;
-    // dsp_intensSetterSetup(&programStruct.control.sau.vodorod_ZI, programStruct.setupParam.vodorod_ZI, 0.00025f);
-//--------------------  REG U END-----------------------//
-
-//--------------------  REG I -----------------------//
-    // for (uint8_t i = 0; i < 3; i++)
-    // {
-    //     programStruct.control.sau.vodorod_RegI[i].k_Int = programStruct.setupParam.vodorod_RegI_ki;
-    //     programStruct.control.sau.vodorod_RegI[i].k_P = programStruct.setupParam.vodorod_RegI_kp;
-    //     programStruct.control.sau.vodorod_RegI[i].period = 0.00025f;
-
-    //     programStruct.control.sau.vodorod_RegI[i].IntMin = 0.0f;
-    //     programStruct.control.sau.vodorod_RegI[i].IntMax = programStruct.setupParam.vodorod_RegI_MAX;
-    //     programStruct.control.sau.vodorod_RegI[i].OutMin = 0.0f;
-    //     programStruct.control.sau.vodorod_RegI[i].OutMax = programStruct.setupParam.vodorod_RegI_MAX;
-    // }
-//--------------------  REG I END-----------------------//
-//--------------------  VODOROD END-----------------------//
-
-
-//--------------------  ZU -----------------------//
-
-//--------------------  REG U -----------------------//
-//     programStruct.control.sau.ZU_RegU.In = programStruct.setupParam.ZU_RegU_in;
-//     programStruct.control.sau.ZU_RegU.k_Int = programStruct.setupParam.ZU_RegU_ki;
-//     programStruct.control.sau.ZU_RegU.k_P = programStruct.setupParam.ZU_RegU_kp;
-//     programStruct.control.sau.ZU_RegU.period = 0.00025f;
-
-//     programStruct.control.sau.ZU_RegU.IntMin = 0.0f;
-//     programStruct.control.sau.ZU_RegU.IntMax = programStruct.setupParam.ZU_RegU_MAX;
-//     programStruct.control.sau.ZU_RegU.OutMin = 0.0f;
-//     programStruct.control.sau.ZU_RegU.OutMax = programStruct.setupParam.ZU_RegU_MAX;
-// //--------------------  REG U END-----------------------//
-
-// //--------------------  REG I -----------------------//
-//     programStruct.control.sau.ZU_RegI.In = programStruct.setupParam.ZU_RegU_MAX;
-//     programStruct.control.sau.ZU_RegI.k_Int = programStruct.setupParam.ZU_RegI_ki;
-//     programStruct.control.sau.ZU_RegI.k_P = programStruct.setupParam.ZU_RegI_kp;
-//     programStruct.control.sau.ZU_RegI.period = 0.00025f;
-
-//     programStruct.control.sau.ZU_RegI.IntMin = 0.0f;
-//     programStruct.control.sau.ZU_RegI.IntMax = programStruct.setupParam.ZU_RegI_MAX;
-//     programStruct.control.sau.ZU_RegI.OutMin = 0.0f;
-//     programStruct.control.sau.ZU_RegI.OutMax = programStruct.setupParam.ZU_RegI_MAX;
-//--------------------  REG I END-----------------------//
-//--------------------  ZU END-----------------------//
-
+__STATIC_INLINE void Program_regulatorInit()
+{
+    asm("Nop");
 }
 
-uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff){
-
+uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff)
+{
     if ( programStruct.control.step != step_debug )
     {
         return 0;
     }
 
-    if(group == bsp_pwm_outs_group_123){
-            programStruct.control.remote.pwmEnable123 = onOff;
-    }else if(group == bsp_pwm_outs_group_456){
-            programStruct.control.remote.pwmEnable456 = onOff;
-    }else{
+    if (group == bsp_pwm_outs_group_123)
+    {
+        programStruct.control.remote.pwmEnable123 = onOff;
+    }
+    else if (group == bsp_pwm_outs_group_456)
+    {
+        programStruct.control.remote.pwmEnable456 = onOff;
+    }
+    else
+    {
         return 0;
     }
     return 1;
 }
 
 
-#define PROGRAM_SETUP_KMOD_MAX (1.0f)
-
+#define PROGRAM_SETUP_KMOD_MAX (0.99f)
 void bsp_pwm_123_callback()
 {
 
     float currentVal = 0.0f;
     float kMod = 0.0f;
-        for (uint8_t phase = 0; phase < programStruct.setupParam.phaseCount; phase++)
-        {
-            kMod = saturate(programStruct.phase[phase].k_modOut, 0.0f, PROGRAM_SETUP_KMOD_MAX);
-
-            kMod = 0.95f;
-            Program_pwmOutsControl(bsp_pwm_outs_group_123, 1);
-            Program_pwmOutsControl(bsp_pwm_outs_group_456, 1);
-
-            currentVal  = *(&programStruct.sin.sinBuf[phase][0] + programStruct.sin.currentIdx);
-            currentVal *= kMod;
-            setPhasePWM(&programStruct.phase[phase], currentVal);
-        }
-        if (++programStruct.sin.currentIdx == programStruct.sin.bufLen)
-        {
-            asm("Nop");
-            programStruct.sin.currentIdx = 0;
-        }
-
-
-    // // @Debug
-    //     for (uint8_t i = 0; i < 6; i++)
-    //     {
-    //         SET_PWM(i, 100.0f);
-    //     }
-    //     Program_pwmOutsControl(bsp_pwm_outs_group_123, 1);
-    //     Program_pwmOutsControl(bsp_pwm_outs_group_456, 1);
-    // // -------------------------------------------------------
-    if (programStruct.control.step == step_debug)
+    for (uint8_t phase = 0; phase < programStruct.setupParam.phaseCount; phase++)
     {
-        return;
+        kMod = saturate(programStruct.phase[phase].k_modOut, 0.0f, PROGRAM_SETUP_KMOD_MAX);
+        currentVal = *(&programStruct.sin.sinBuf[phase][0] + programStruct.sin.currentIdx);
+        currentVal *= kMod;
+        setPhasePWM(&programStruct.phase[phase], currentVal);
+    }
+    if (++programStruct.sin.currentIdx == programStruct.sin.bufLen)
+    {
+        asm("Nop");
+        programStruct.sin.currentIdx = 0;
     }
 
     return;
 }
 
-void bsp_pwm_456_callback(){
-
-    if (programStruct.control.step == step_debug)
-    {
-        return;
-    }
-
-    return;
-}
 //----------------------- PWM END----------------------
 
 //------------   АЦП   ------------//
@@ -775,8 +703,6 @@ __STATIC_INLINE uint8_t Program_analogInit(){
     return 1;
 }
 
-
-
 __STATIC_INLINE float saturate(float in, float min, float max)
 {
     if (in < min)
@@ -786,11 +712,11 @@ __STATIC_INLINE float saturate(float in, float min, float max)
     return in;
 }
 
-#define PROGRAM_SETUP_PWM_MIN_VAL (250)
+#define PROGRAM_SETUP_PWM_MIN_VAL (100)
 __STATIC_INLINE void setPhasePWM(Program_PHASE_typedef *phase, float value)
 {
-
-    uint16_t halfArr = programStruct.setupParam.arrVal / 2;
+    uint16_t Arr = LL_HRTIM_TIM_GetPeriod(HRTIM1, BSP_PWM_TIM_PWM_1);
+    uint16_t halfArr = Arr / 2;
 
     float tmp = value * (halfArr - PROGRAM_SETUP_PWM_MIN_VAL);   // CCR регистр должен быть >= 2 & <= arr - 2
 

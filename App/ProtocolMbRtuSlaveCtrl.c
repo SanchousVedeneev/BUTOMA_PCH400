@@ -45,10 +45,9 @@ enum mdb_table_program
   tab_prg_prg_analog_AI8,
   tab_prg_prg_analog_AI9,
   tab_prg_prg_analog_AI10,
-  tab_prg_pwm1, // ... 1222
-  tab_prg_vodorod_iIn = 1223,
+  tab_prg_k_modIn
 };
-#define MDB_PROGRAM_BUF_COUNT (tab_prg_vodorod_iIn - MDB_TABLE_PROGRAM_REG_NO + 1)
+#define MDB_PROGRAM_BUF_COUNT (tab_prg_k_modIn - MDB_TABLE_PROGRAM_REG_NO + 1)
 uint16_t mdb_program_buf[MDB_PROGRAM_BUF_COUNT];
 ModbusSS_table_t mdb_table_program = {
     .buf = (uint8_t *)mdb_program_buf,
@@ -135,7 +134,7 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   
   for (uint8_t i = 0; i < 6; i++)
   {
-      //ModbusSS_SetWord(&mdb_table_program, tab_prg_pwm1 + i ,programStruct.control.remote.pwmArray[i]);
+    ModbusSS_SetWord(&mdb_table_program, tab_prg_k_modIn, (uint16_t)(programStruct.control.remote.k_modIn*1000.0f));
   }
   // PROGRAM END-----------------------------//
 
@@ -211,17 +210,8 @@ __weak void protocolMbRtuSlaveCtrl_callback_H_WRITE(ModbusSS_table_t *table, uin
         }
       }
       break;
-    case tab_prg_pwm1:
-    case tab_prg_pwm1 + 1:
-    case tab_prg_pwm1 + 2:
-    case tab_prg_pwm1 + 3:
-    case tab_prg_pwm1 + 4:
-    case tab_prg_pwm1 + 5:
-
-      if (Program_set_pwm_debug(reg - tab_prg_pwm1, ModbusSS_GetWord(&mdb_table_program, reg)))
-      {
-        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
-      }
+    case tab_prg_k_modIn:
+      Program_set_k_mod_debug(ModbusSS_GetWord(&mdb_table_program, reg));
       break;
     default:
       response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_FAIL;

@@ -106,9 +106,11 @@ typedef struct
             uint8_t        : 6;
         }bits; 
     } dout;
-    uint16_t kMod_array;
     uint8_t pwmEnable123;
     uint8_t pwmEnable456;
+    float k_modIn;  // 0..1
+    float voltageIn;
+    float currentIn;
 } Program_REMOTE_typedef;
 
 typedef struct
@@ -190,7 +192,6 @@ typedef struct
 
     uint64_t protect_control; // по умолчанию =0
     uint8_t phaseCount;
-    uint32_t arrVal;
 } Program_PARAM_typedef;
 
 
@@ -225,11 +226,12 @@ uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc);
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff);
 uint8_t Program_LoadDefaultParam_debug();
 
+void Program_set_k_mod_debug(uint16_t kMod);
+
+
 void Program_sinBuf_init();
 
 void Program_phase_init();
-
-void Program_get_arr_HRTTIM();
 
 uint8_t Program_GoReset();
 
