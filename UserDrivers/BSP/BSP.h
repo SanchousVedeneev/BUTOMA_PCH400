@@ -60,8 +60,9 @@ void bsp_dsp_release_bufs();
 // ----------------------------- CORDIC -----------------------------
 int32_t bsp_float_to_q1_31(float in);
 float bsp_q1_31_to_float(int32_t in);
-uint16_t bsp_writeSinBuf(uint16_t f_pwm, uint16_t f_out, float* sinBuf);
+uint16_t bsp_writeSinBuf(uint16_t f_pwm, uint16_t f_out);
 void bsp_cordic_init();
+
 
 // --------------------------- CORDIC END ---------------------------
 

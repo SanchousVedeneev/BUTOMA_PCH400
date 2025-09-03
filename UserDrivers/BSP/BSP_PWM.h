@@ -126,5 +126,6 @@ typedef enum{              //up     up dowm
 
 uint8_t bsp_pwm_set_freq(bsp_pwm_outs_group_typedef group, bsp_pwm_freq_typedef freq, uint8_t phaseShift);
 uint8_t bsp_pwm_set_ccrPercentX10(uint8_t ccrIdx, float valuePercentX10);
+uint8_t bsp_pwm_set_ccr(uint8_t ccrIdx, uint32_t ccr);
 
 #endif

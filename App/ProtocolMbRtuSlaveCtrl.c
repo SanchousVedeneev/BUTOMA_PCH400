@@ -135,7 +135,7 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   
   for (uint8_t i = 0; i < 6; i++)
   {
-      ModbusSS_SetWord(&mdb_table_program, tab_prg_pwm1 + i ,programStruct.control.remote.pwmArray[i]);
+      //ModbusSS_SetWord(&mdb_table_program, tab_prg_pwm1 + i ,programStruct.control.remote.pwmArray[i]);
   }
   // PROGRAM END-----------------------------//
 

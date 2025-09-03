@@ -7,7 +7,6 @@
 
 extern bsp_dInOut_typedef bsp_dInOut_struct;
 
-
 static void app_hardware_init(void);
 
 void app_main(void)

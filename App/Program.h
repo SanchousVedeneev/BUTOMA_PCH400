@@ -58,6 +58,34 @@ typedef enum
 	prg_dout10_UNUSED    // 9
 } Program_dout_typedef;
 
+
+#define PROGRAM_INV_L ((uint8_t)0)
+#define PROGRAM_INV_R ((uint8_t)1)
+
+#define PROGRAM_OUT_U_INV_L ((uint8_t)0)
+#define PROGRAM_OUT_V_INV_L ((uint8_t)1)
+#define PROGRAM_OUT_W_INV_L ((uint8_t)2)
+
+#define PROGRAM_OUT_U_INV_R ((uint8_t)3)
+#define PROGRAM_OUT_V_INV_R ((uint8_t)4)
+#define PROGRAM_OUT_W_INV_R ((uint8_t)5)
+
+#define PROGRAM_FHASE_U ((uint8_t)0)
+#define PROGRAM_FHASE_V ((uint8_t)1)
+#define PROGRAM_FHASE_W ((uint8_t)2)
+
+
+typedef struct           // U1 - U2
+{
+    uint8_t invNo1;      // 0 -> L ; 1 -> R
+    uint8_t channelNo1;  // [0 1 2] -> [U V W]
+    uint8_t invNo2;      // 0 -> L ; 1 -> R
+    uint8_t channelNo2;  // [0 1 2] -> [U V W]
+    float k_modOut;
+    float *voltageFb;
+}Program_PHASE_typedef;
+
+
 typedef struct
 {
     union
@@ -77,11 +105,11 @@ typedef struct
             uint8_t dout10 : 1;
             uint8_t        : 6;
         }bits; 
-    }dout;
-    uint16_t pwmArray[6];
+    } dout;
+    uint16_t kMod_array;
     uint8_t pwmEnable123;
     uint8_t pwmEnable456;
-}Program_REMOTE_typedef;
+} Program_REMOTE_typedef;
 
 typedef struct
 {
@@ -104,14 +132,14 @@ typedef struct
 }Program_AIN_typedef;
 
 typedef enum{
-    prg_analog_AI0,
-    prg_analog_AI1,
-    prg_analog_AI2,
-    prg_analog_AI3,
-    prg_analog_AI4,
-    prg_analog_AI5,
-    prg_analog_AI6,
-    prg_analog_AI7,
+    prg_analog_I_u,
+    prg_analog_I_v,
+    prg_analog_I_w,
+    prg_analog_U_u,
+    prg_analog_U_v,
+    prg_analog_U_w,
+    prg_analog_Uzpt_inv_L,
+    prg_analog_Uzpt_inv_R,
     prg_analog_AI8,
     prg_analog_AI9,
     prg_analog_AI10
@@ -128,7 +156,9 @@ typedef struct
 {
     uint16_t f_pwm;
     uint16_t f_out;
-    float sinBuf[3][320]
+    uint16_t bufLen;
+    float sinBuf[3][320];
+    uint16_t currentIdx;
 } Program_SIN_typedef;
 
 
@@ -159,13 +189,10 @@ typedef struct
     uint16_t analog_filter_N[PRG_ANALOG_COUNT]; //+
 
     uint64_t protect_control; // по умолчанию =0
+    uint8_t phaseCount;
+    uint32_t arrVal;
 } Program_PARAM_typedef;
 
-
-typedef struct
-{
-    uint16_t vodorod_state;
-}Vodorod_bsau_typedef;
 
 typedef struct
 {
@@ -173,8 +200,8 @@ typedef struct
     Program_PARAM_typedef setupParam;
     Program_SYS_typedef sys;
     Program_ANALOG_typedef analog;
-    Vodorod_bsau_typedef VodorodBsau;
     Program_SIN_typedef sin;
+    Program_PHASE_typedef phase[3];
 }Program_typedef;
 
 void Program_start();
@@ -197,6 +224,12 @@ uint8_t Program_set_dout_debug(uint16_t douts);
 uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc);
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff);
 uint8_t Program_LoadDefaultParam_debug();
+
+void Program_sinBuf_init();
+
+void Program_phase_init();
+
+void Program_get_arr_HRTTIM();
 
 uint8_t Program_GoReset();
 

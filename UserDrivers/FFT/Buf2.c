@@ -19,6 +19,7 @@ __INLINE uint8_t Buf_16_push(Buf_16_typedef *buf, DSP_T *data)
     return BUF_PUSH_OK;
 }
 
-void Buf_16_release_buf(Buf_16_typedef* buf){
+void Buf_16_release_buf(Buf_16_typedef* buf)
+{
     buf->_block = 0;
 }

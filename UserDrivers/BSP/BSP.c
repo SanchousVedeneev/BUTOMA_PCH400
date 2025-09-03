@@ -609,7 +609,7 @@ void bsp_pwm_enable_outs_VT_CONCEPT(bsp_pwm_outs_group_typedef group, bsp_pwm_ou
   uint32_t group123_high =  BSP_PWM_TIM_OUTS_123_HIGH;
   uint32_t group123_low =   BSP_PWM_TIM_OUTS_123_LOW;
   uint32_t group456_high =  BSP_PWM_TIM_OUTS_456_HIGH;
-  uint32_t group456_low =    BSP_PWM_TIM_OUTS_456_LOW;
+  uint32_t group456_low =   BSP_PWM_TIM_OUTS_456_LOW;
 
   /*
     На плате перепутаны верхний и нижний ключ
@@ -632,13 +632,16 @@ void bsp_pwm_enable_outs_VT_CONCEPT(bsp_pwm_outs_group_typedef group, bsp_pwm_ou
     break;
     }
 
-    if(group == bsp_pwm_outs_group_123){
-          controlWord = group123_high * highSide + group123_low * lowSide;
-    }else if(group == bsp_pwm_outs_group_456){
-          controlWord = group456_high * highSide + group456_low * lowSide;
+    if (group == bsp_pwm_outs_group_123)
+    {
+      controlWord = group123_high * highSide + group123_low * lowSide;
+    }
+    else if (group == bsp_pwm_outs_group_456)
+    {
+      controlWord = group456_high * highSide + group456_low * lowSide;
     }
 
-    LL_HRTIM_EnableOutput(HRTIM1,controlWord);
+    LL_HRTIM_EnableOutput(HRTIM1, controlWord);
 }
 
 void bsp_pwm_disable_outs_VT(bsp_pwm_outs_group_typedef group){
@@ -648,9 +651,12 @@ void bsp_pwm_disable_outs_VT(bsp_pwm_outs_group_typedef group){
   uint32_t group123 =  BSP_PWM_TIM_OUTS_123_HIGH | BSP_PWM_TIM_OUTS_123_LOW;
   uint32_t group456 =  BSP_PWM_TIM_OUTS_456_HIGH | BSP_PWM_TIM_OUTS_456_LOW;
 
-    if(group == bsp_pwm_outs_group_123){
+    if(group == bsp_pwm_outs_group_123)
+    {
           controlWord = group123;
-    }else if(group == bsp_pwm_outs_group_456){
+    }
+    else if (group == bsp_pwm_outs_group_456)
+    {
           controlWord = group456;
     }
     LL_HRTIM_DisableOutput(HRTIM1,controlWord);
@@ -664,43 +670,49 @@ void bsp_pwm_disable_all_outs_VT(){
                                   BSP_PWM_TIM_OUTS_456_LOW  );
 }
 
-static uint16_t freqArrayArr[] = {
-  48000,//  bsp_pwm_freq_3500_hz,       //48000  24000    +
-  42000,//   bsp_pwm_freq_4000_hz,      //42000  21000    +
-  30000,//  bsp_pwm_freq_5600_hz,       //30000  15000    +
-  24000,//  bsp_pwm_freq_7000_hz,       //24000  12000    +
-  19200,//  bsp_pwm_freq_8750_hz,       //19200  9600     +
-  16800//  bsp_pwm_freq_10000_hz        //16800  8400     +
+static uint16_t freqArrayArr[] = 
+{
+  24000,  //  bsp_pwm_freq_3500_hz,     //48000 - up  24000 - upDown
+  21000,  //   bsp_pwm_freq_4000_hz,    //42000 - up  21000 - upDown
+  15000,  //  bsp_pwm_freq_5600_hz,     //30000 - up  15000 - upDown 
+  12000,  //  bsp_pwm_freq_7000_hz,     //24000 - up  12000 - upDown   
+  9600,   //  bsp_pwm_freq_8750_hz,     //19200 - up  9600  - upDown  
+  8400    //  bsp_pwm_freq_10000_hz      //16800 - up  8400  - upDown 
 };
 
 uint8_t bsp_pwm_set_freq(bsp_pwm_outs_group_typedef group, bsp_pwm_freq_typedef freq, uint8_t phaseShift){
 
   uint16_t _freq = freqArrayArr[freq];
 
-    while (LL_HRTIM_IsActiveFlag_DLLRDY(HRTIM1) == RESET)
+  while (LL_HRTIM_IsActiveFlag_DLLRDY(HRTIM1) == RESET)
   {
     asm("NOP");
   }
 
-
-  if(freq > bsp_pwm_freq_10000_hz){
+  if(freq > bsp_pwm_freq_10000_hz)
+  {
     return 0;
   }
 
-  if(group == bsp_pwm_outs_group_123){
+  if(group == bsp_pwm_outs_group_123)
+  {
     BSP_PWM_SET_PERIOD_VT1(_freq);
     BSP_PWM_SET_PERIOD_VT2(_freq);
     BSP_PWM_SET_PERIOD_VT3(_freq);
-    if(phaseShift){
+    if(phaseShift)
+    {
         BSP_PWM_SET_CNT_VT2(_freq/3);
         BSP_PWM_SET_CNT_VT3(2*(_freq/3));
     }
     LL_HRTIM_ForceUpdate(HRTIM1, BSP_PWM_TIM_PWM_1 | BSP_PWM_TIM_PWM_2 | BSP_PWM_TIM_PWM_3);
-  }else{
+  }
+  else
+  {
     BSP_PWM_SET_PERIOD_VT4(_freq);
     BSP_PWM_SET_PERIOD_VT5(_freq);
     BSP_PWM_SET_PERIOD_VT6(_freq);
-    if(phaseShift){
+    if(phaseShift)
+    {
         BSP_PWM_SET_CNT_VT5(_freq/3);
         BSP_PWM_SET_CNT_VT6(2*(_freq/3));
     }
@@ -710,13 +722,15 @@ uint8_t bsp_pwm_set_freq(bsp_pwm_outs_group_typedef group, bsp_pwm_freq_typedef 
   return 1;
 }
 
-static const uint32_t timer_array[] = {
-    BSP_PWM_TIM_PWM_1,
-    BSP_PWM_TIM_PWM_2,
-    BSP_PWM_TIM_PWM_3,
-    BSP_PWM_TIM_PWM_4,
-    BSP_PWM_TIM_PWM_5,
-    BSP_PWM_TIM_PWM_6};
+static const uint32_t timer_array[] = 
+{
+  BSP_PWM_TIM_PWM_1,
+  BSP_PWM_TIM_PWM_2,
+  BSP_PWM_TIM_PWM_3,
+  BSP_PWM_TIM_PWM_4,
+  BSP_PWM_TIM_PWM_5,
+  BSP_PWM_TIM_PWM_6
+};
 
 uint8_t bsp_pwm_set_ccrPercentX10(uint8_t ccrIdx, float valuePercentX10){
 
@@ -737,6 +751,19 @@ uint8_t bsp_pwm_set_ccrPercentX10(uint8_t ccrIdx, float valuePercentX10){
     BSP_PWM_SET_CCR(timer_array[ccrIdx], ccr);
     return 1;
 }
+
+
+uint8_t bsp_pwm_set_ccr(uint8_t ccrIdx, uint32_t ccr)
+{
+    if(ccrIdx > 5)
+    {
+      return 0;
+    }
+
+    BSP_PWM_SET_CCR(timer_array[ccrIdx], ccr);
+    return 1;
+}
+
 
 void bsp_pwm_start_IRQ_123_IRQ_456()
 {
@@ -813,8 +840,6 @@ DSP_T adc_raw_buf[MAIN_ADC_BUF_COUNT][256];
 DSP_T dsp_fft_buf[512];
 
 float var_fft_out[MAIN_ADC_BUF_COUNT][3];
-
-
 
 float var_fft_out_i_cal[3][3];
 float var_fft_out_u_cal[3][3];
@@ -940,9 +965,12 @@ __INLINE void bsp_dsp_release_bufs()
 }
 // ---------------------------- FFT END ----------------------------
 
+
+// ------------------------------ CORDIC ------------------------------
+float sinBuf[3][320];
+
 void bsp_cordic_init()
 {
-      /* ----------------------  CORDIC --------------------------------*/
     LL_CORDIC_Config(CORDIC,
      LL_CORDIC_FUNCTION_COSINE,   /* cosine function */ \
 		LL_CORDIC_PRECISION_4CYCLES, /* max precision for q1.31 cosine */\
@@ -951,7 +979,6 @@ void bsp_cordic_init()
 		LL_CORDIC_NBREAD_2,          /* Two output data: cosine, then sine */\
 		LL_CORDIC_INSIZE_32BITS,     /* q1.31 format for input data */\
 		LL_CORDIC_OUTSIZE_32BITS);   /* q1.31 format for output data */
-  /* ----------------------  CORDIC end --------------------------------*/
 }
 
 int32_t bsp_float_to_q1_31(float in)
@@ -973,27 +1000,31 @@ float bsp_q1_31_to_float(int32_t in)
   return out;
 }
 
-uint16_t bsp_writeSinBuf(uint16_t f_pwm, uint16_t f_out, float* sinBuf)
+uint16_t bsp_writeSinBuf(uint16_t f_pwm, uint16_t f_out)
 {
   uint16_t bufLen = (f_pwm / f_out) * 2;
 
-  float angle[] = {0.0f, 2.0f/3.0f, -2.0f/3.0f}; //PI rad => 1.0 ; -PI => -1.0
-  for (int phase = 0; phase < 3; phase++){
-  for (int i = 0; i < bufLen; i++)
+  float angle[] = {0.0f, 2.0f / 3.0f, -2.0f / 3.0f}; // PI rad => 1.0 ; -PI => -1.0
+  for (int phase = 0; phase < 3; phase++)
   {
-    int32_t Q131 =  bsp_float_to_q1_31(angle[phase]);
-    /* Write angle */
-    LL_CORDIC_WriteData(CORDIC, Q131);
-    /* Read cosine */
-     LL_CORDIC_ReadData(CORDIC);
-    /* Read sine */
-    Q131 = (int32_t)LL_CORDIC_ReadData(CORDIC);
-    sinBuf[phase][i] = bsp_q1_31_to_float(Q131);
-    angle[phase] += 2.0f / ((float)bufLen);
-    if (angle[phase] > 1.0f)
-      angle[phase] -= 2.0f;
-  }
+    for (int i = 0; i < bufLen; i++)
+    {
+      int32_t Q131 = bsp_float_to_q1_31(angle[phase]);
+      /* Write angle */
+      LL_CORDIC_WriteData(CORDIC, Q131);
+      /* Read cosine */
+      LL_CORDIC_ReadData(CORDIC);
+      /* Read sine */
+      Q131 = (int32_t)LL_CORDIC_ReadData(CORDIC);
+      sinBuf[phase][i] = bsp_q1_31_to_float(Q131);
+      angle[phase] += 2.0f / ((float)bufLen);
+      if (angle[phase] > 1.0f)
+      {
+        angle[phase] -= 2.0f;
+      }
+    }
   }
   return bufLen;
 }
 
+// ---------------------------- CORDIC END ----------------------------
