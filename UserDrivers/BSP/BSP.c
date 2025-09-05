@@ -672,12 +672,12 @@ void bsp_pwm_disable_all_outs_VT(){
 
 static uint16_t freqArrayArr[] = 
 {
-  24000,  //  bsp_pwm_freq_3500_hz,     //48000 - up  24000 - upDown
-  21000,  //   bsp_pwm_freq_4000_hz,    //42000 - up  21000 - upDown
+  21000,  //  bsp_pwm_freq_4000_hz,     //42000 - up  21000 - upDown
+  17500,  //  bsp_pwm_freq_4800_hz,     //35000 - up  17500 - upDown
   15000,  //  bsp_pwm_freq_5600_hz,     //30000 - up  15000 - upDown 
-  12000,  //  bsp_pwm_freq_7000_hz,     //24000 - up  12000 - upDown   
-  9600,   //  bsp_pwm_freq_8750_hz,     //19200 - up  9600  - upDown  
-  8400    //  bsp_pwm_freq_10000_hz      //16800 - up  8400  - upDown 
+  14000,  //  bsp_pwm_freq_6000_hz,     //28000 - up  14000 - upDown   
+  13125,  //  bsp_pwm_freq_6400_hz,     //26250 - up  13125 - upDown  
+  10500   //  bsp_pwm_freq_8000_hz      //21000 - up  10500 - upDown 
 };
 
 uint8_t bsp_pwm_set_freq(bsp_pwm_outs_group_typedef group, bsp_pwm_freq_typedef freq, uint8_t phaseShift){
@@ -689,7 +689,7 @@ uint8_t bsp_pwm_set_freq(bsp_pwm_outs_group_typedef group, bsp_pwm_freq_typedef 
     asm("NOP");
   }
 
-  if(freq > bsp_pwm_freq_10000_hz)
+  if(freq > bsp_pwm_freq_8000_hz)
   {
     return 0;
   }
@@ -732,26 +732,34 @@ static const uint32_t timer_array[] =
   BSP_PWM_TIM_PWM_6
 };
 
-uint8_t bsp_pwm_set_ccrPercentX10(uint8_t ccrIdx, float valuePercentX10){
+uint8_t bsp_pwm_set_ccrPercentX10(uint8_t ccrIdx, float valuePercentX10)
+{
+  if (ccrIdx > 5)
+  {
+    return 0;
+  }
 
-    if(ccrIdx > 5) return 0;
+  uint16_t arr = LL_HRTIM_TIM_GetPeriod(HRTIM1, timer_array[ccrIdx]);
 
-    uint16_t arr = LL_HRTIM_TIM_GetPeriod(HRTIM1,timer_array[ccrIdx]);
-    float ccr = arr * valuePercentX10;
-    ccr /= 1000.0f;
+  float ccr = (float)arr * valuePercentX10;
+  ccr /= 1000.0f;
 
+  if (ccr < 0.0f)
+  {
+    ccr = 0.0f;
+  }
+  else if (ccr > (arr - 1))
+  {
+    ccr = arr + 1;
+  }
 
-    if(ccr<0.0f) ccr = 0.0f;
-    else if(ccr > (arr - 1)) ccr = arr + 1;
+  /*
+    Если ccr == arr, происходит сбой
+  */
 
-    /*
-      Если ccr == arr, происходит сбой
-    */
-
-    BSP_PWM_SET_CCR(timer_array[ccrIdx], ccr);
-    return 1;
+  BSP_PWM_SET_CCR(timer_array[ccrIdx], ccr);
+  return 1;
 }
-
 
 uint8_t bsp_pwm_set_ccr(uint8_t ccrIdx, uint32_t ccr)
 {

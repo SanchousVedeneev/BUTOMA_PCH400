@@ -85,7 +85,9 @@ typedef struct           // U1 - U2
     float *voltageFb;
 }Program_PHASE_typedef;
 
-
+#define COUNT_CHANNEL_PWM (6)
+#define REMOTE_KMOD (0)
+#define REMOTE_KPWM (1)
 typedef struct
 {
     union
@@ -108,6 +110,8 @@ typedef struct
     } dout;
     uint8_t pwmEnable123;
     uint8_t pwmEnable456;
+    uint8_t choise_kPWM_or_kMod;
+    float kPWM[COUNT_CHANNEL_PWM];
     float k_modIn;  // 0..1
     float voltageIn;
     float currentIn;
@@ -192,13 +196,16 @@ typedef struct
 
     uint64_t protect_control; // по умолчанию =0
     uint8_t phaseCount;
+    uint16_t f_out;
+    uint16_t U_out;
+    uint16_t PWM_freq;
 } Program_PARAM_typedef;
 
 
 typedef struct
 {
     Program_CONTROL_typedef control;
-    Program_PARAM_typedef setupParam;
+    Program_PARAM_typedef setup;
     Program_SYS_typedef sys;
     Program_ANALOG_typedef analog;
     Program_SIN_typedef sin;
@@ -226,7 +233,9 @@ uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc);
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff);
 uint8_t Program_LoadDefaultParam_debug();
 
-void Program_set_k_mod_debug(uint16_t kMod);
+uint8_t Program_set_k_mod_debug(uint16_t kMod);
+
+uint8_t Program_сhoice_kPWM_or_kMod_debug(uint16_t choise);
 
 
 void Program_sinBuf_init();
