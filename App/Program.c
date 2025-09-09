@@ -169,11 +169,11 @@ void Program_start()
     Program_ParamSetToDefault();
 
     // @DEBUG
-    //  if (Program_ParamLoad() == 0)
-    //  {
-    //     // Неудачная попытка
-    //     asm("NOP");
-    //  }
+     if (Program_ParamLoad() == 0)
+     {
+        // Неудачная попытка
+        asm("NOP");
+     }
 
     Program_regulatorInit();
     Program_pwmInit();
@@ -249,6 +249,12 @@ __STATIC_INLINE void Program_fastStop(){
 }
 
 /* ЗАДАТЬ НАСТРОЙКИ ПО УМОЛЧАНИЮ */
+#define PROGRAM_FHASE_COUNT_1 (1)
+#define PROGRAM_FHASE_COUNT_3 (3)
+
+#define PROGRAM_F_OUT_50HZ    (50)
+#define PROGRAM_F_OUT_400HZ   (400)
+
 void Program_ParamSetToDefault()
 {
     for (uint8_t i = 0; i < PRG_ANALOG_COUNT; i++)
@@ -361,7 +367,7 @@ __INLINE uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc
 #define PROGRAM_KMOD_MDB_MIN (0)
 __INLINE uint8_t Program_set_k_mod_debug (uint16_t kMod_mdb)
 {
-    if(programStruct.control.step != step_debug)
+    if (programStruct.control.step != step_debug)
     {
         return 0;
     }
@@ -384,7 +390,7 @@ __INLINE uint8_t Program_set_k_mod_debug (uint16_t kMod_mdb)
 
 __INLINE uint8_t Program_сhoice_kPWM_or_kMod_debug(uint16_t choise)
 {
-    if(programStruct.control.step != step_debug)
+    if (programStruct.control.step != step_debug)
     {
         return 0;
     }
@@ -396,6 +402,117 @@ __INLINE uint8_t Program_сhoice_kPWM_or_kMod_debug(uint16_t choise)
     else if (choise == REMOTE_KPWM)
     {
         programStruct.control.remote.choise_kPWM_or_kMod = REMOTE_KPWM;
+    }
+
+    return 1;
+}
+
+__INLINE uint8_t Program_set_phaseCount_debug(uint16_t phaseCount)
+{
+    if (programStruct.control.step != step_debug)
+    {
+        return 0;
+    }
+
+    if (phaseCount == PROGRAM_FHASE_COUNT_1)
+    {
+        programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_1;
+    }
+    else if (phaseCount == PROGRAM_FHASE_COUNT_3)
+    {
+        programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_3;
+    }
+    else 
+    {
+        programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_1;
+        return 0;
+    }
+    return 1;
+}
+
+__INLINE uint8_t Program_set_fOut_debug(uint16_t fOut)
+{
+    if (programStruct.control.step != step_debug)
+    {
+        return 0;
+    }
+
+    if (fOut == PROGRAM_F_OUT_50HZ)
+    {
+        programStruct.setup.f_out = PROGRAM_F_OUT_50HZ;
+    }
+    else if (fOut == PROGRAM_F_OUT_400HZ)
+    {
+        programStruct.setup.f_out = PROGRAM_F_OUT_400HZ;
+    }
+    else 
+    {
+        programStruct.setup.f_out = PROGRAM_F_OUT_50HZ;
+        return 0;
+    }
+    return 1; 
+}
+
+#define PROGRAM_U_OUT_MIN (0)
+#define PROGRAM_U_OUT_MAX (230)
+__INLINE uint8_t Program_set_uOut_debug(uint16_t uOut)
+{
+    if (programStruct.control.step != step_debug)
+    {
+        return 0;
+    }
+
+    if (uOut <= PROGRAM_U_OUT_MIN)
+    {
+        uOut = PROGRAM_U_OUT_MIN;
+        return 0;
+    }
+    else if (uOut >= PROGRAM_U_OUT_MAX)
+    {
+        uOut = PROGRAM_U_OUT_MAX;
+        return 0;
+    }
+    programStruct.setup.U_out = uOut;
+    return 1;
+}
+
+#define PROGRAM_PWM_FREQ_4000HZ (4000)
+#define PROGRAM_PWM_FREQ_4800HZ (4800)
+#define PROGRAM_PWM_FREQ_5600HZ (5600)
+#define PROGRAM_PWM_FREQ_6000HZ (6000)
+#define PROGRAM_PWM_FREQ_6400HZ (6400)
+#define PROGRAM_PWM_FREQ_8000HZ (8000)
+__INLINE uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq)
+{
+    if (programStruct.control.step != step_debug)
+    {
+        return 0;
+    }
+
+    switch (PWM_freq)
+    {
+    case PROGRAM_PWM_FREQ_4000HZ:
+        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ;
+        break;
+    case PROGRAM_PWM_FREQ_4800HZ:
+        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4800HZ;
+        break; 
+    case PROGRAM_PWM_FREQ_5600HZ:
+        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_5600HZ;
+        break;
+    case PROGRAM_PWM_FREQ_6000HZ:
+        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_6000HZ;
+        break;
+    case PROGRAM_PWM_FREQ_6400HZ:
+        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_6400HZ;
+        break;
+    case PROGRAM_PWM_FREQ_8000HZ:
+        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_8000HZ;
+        break; 
+    default:
+        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ;
+        return 0;
+        break;
     }
 
     return 1;
@@ -525,27 +642,27 @@ __STATIC_INLINE void Program_pwmInit()
 
     switch (programStruct.setup.PWM_freq)
     {
-    case 4000:
+    case PROGRAM_PWM_FREQ_4000HZ:
         bsp_pwm_set_freq(bsp_pwm_outs_group_123, bsp_pwm_freq_4000_hz, 1);
         bsp_pwm_set_freq(bsp_pwm_outs_group_456, bsp_pwm_freq_4000_hz, 1);
         break;
-    case 4800:
+    case PROGRAM_PWM_FREQ_4800HZ:
         bsp_pwm_set_freq(bsp_pwm_outs_group_123, bsp_pwm_freq_4800_hz, 1);
         bsp_pwm_set_freq(bsp_pwm_outs_group_456, bsp_pwm_freq_4800_hz, 1);
         break; 
-    case 5600:
+    case PROGRAM_PWM_FREQ_5600HZ:
         bsp_pwm_set_freq(bsp_pwm_outs_group_123, bsp_pwm_freq_5600_hz, 1);
         bsp_pwm_set_freq(bsp_pwm_outs_group_456, bsp_pwm_freq_5600_hz, 1);
         break;
-    case 6000:
+    case PROGRAM_PWM_FREQ_6000HZ:
         bsp_pwm_set_freq(bsp_pwm_outs_group_123, bsp_pwm_freq_6000_hz, 1);
         bsp_pwm_set_freq(bsp_pwm_outs_group_456, bsp_pwm_freq_6000_hz, 1);
         break;
-    case 6400:
+    case PROGRAM_PWM_FREQ_6400HZ:
         bsp_pwm_set_freq(bsp_pwm_outs_group_123, bsp_pwm_freq_6400_hz, 1);
         bsp_pwm_set_freq(bsp_pwm_outs_group_456, bsp_pwm_freq_6400_hz, 1);
         break;
-    case 8000:
+    case PROGRAM_PWM_FREQ_8000HZ:
         bsp_pwm_set_freq(bsp_pwm_outs_group_123, bsp_pwm_freq_8000_hz, 1);
         bsp_pwm_set_freq(bsp_pwm_outs_group_456, bsp_pwm_freq_8000_hz, 1);
         break; 
@@ -563,7 +680,14 @@ __STATIC_INLINE void Program_pwmInit()
 
 __STATIC_INLINE void Program_regulatorInit()
 {
-    asm("Nop");
+    for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
+    {
+        programStruct.control.sau.voltageRegulator[phase].IntMin = 0.0f;
+        programStruct.control.sau.voltageRegulator[phase].IntMax = 1.0f;
+        programStruct.control.sau.voltageRegulator[phase].OutMin = 0.0f;
+        programStruct.control.sau.voltageRegulator[phase].OutMax = 1.0f;
+        
+    }
 }
 
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff)
@@ -757,8 +881,8 @@ uint8_t Program_analogSetFilterN(Program_ANALOG_ENUM_typedef idx, uint16_t filte
     return 1;
 }
 
-__STATIC_INLINE uint8_t Program_analogInit(){
-
+__STATIC_INLINE uint8_t Program_analogInit()
+{
     for (uint8_t i = 0; i < PRG_ANALOG_COUNT; i++)
     {
         programStruct.analog.aIn[i].bspIdx        = -1;
@@ -798,7 +922,7 @@ __STATIC_INLINE float saturate(float in, float min, float max)
     return in;
 }
 
-#define PROGRAM_SETUP_PWM_MIN_VAL (300)
+#define PROGRAM_SETUP_PWM_MIN_VAL (250)
 __STATIC_INLINE void setPhasePWM(Program_PHASE_typedef *phase, float value)
 {
     uint16_t Arr = LL_HRTIM_TIM_GetPeriod(HRTIM1, BSP_PWM_TIM_PWM_1);

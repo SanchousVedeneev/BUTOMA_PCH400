@@ -113,13 +113,15 @@ typedef struct
     uint8_t choise_kPWM_or_kMod;
     float kPWM[COUNT_CHANNEL_PWM];
     float k_modIn;  // 0..1
-    float voltageIn;
-    float currentIn;
+    // float voltageIn;
+    // float currentIn;
 } Program_REMOTE_typedef;
 
 typedef struct
 {
     uint8_t vodorodStart;
+    dsp_regulator_typedef voltageRegulator[3];
+    float voltageIn;
 }Program_SAU_typedef;
 
 #define PROGRAM_ADC_MAX_FILTER_ORDER (12)
@@ -194,7 +196,7 @@ typedef struct
     uint8_t analog_av_order[PRG_ANALOG_COUNT];  //+
     uint16_t analog_filter_N[PRG_ANALOG_COUNT]; //+
 
-    uint64_t protect_control; // по умолчанию =0
+    uint16_t protect_control; // по умолчанию =0
     uint8_t phaseCount;
     uint16_t f_out;
     uint16_t U_out;
@@ -234,17 +236,20 @@ uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOf
 uint8_t Program_LoadDefaultParam_debug();
 
 uint8_t Program_set_k_mod_debug(uint16_t kMod);
-
 uint8_t Program_сhoice_kPWM_or_kMod_debug(uint16_t choise);
+uint8_t Program_set_phaseCount_debug(uint16_t phaseCount);
+uint8_t Program_set_fOut_debug(uint16_t fOut);
+uint8_t Program_set_uOut_debug(uint16_t uOut);
+uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq);
 
 
 void Program_sinBuf_init();
-
 void Program_phase_init();
 
 uint8_t Program_GoReset();
 
-#define setBit(reg, bit)   (reg |=  (1 << bit))
-#define resetBit(reg, bit) (reg &= ~(1 << bit))
+
+#define setBit  (reg, bit)   (reg |=  (1 << bit))
+#define resetBit(reg, bit)   (reg &= ~(1 << bit))
 
 #endif

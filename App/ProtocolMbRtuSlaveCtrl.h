@@ -12,6 +12,7 @@ typedef enum{
     protocol_cmd_reset,
     protocol_cmd_pwmOuts123,
     protocol_cmd_pwmOuts456,
+    protocol_cmd_param_set_defolt
 }protocolMbRtuSlaveCtrl_control_typedef;
 
 typedef struct

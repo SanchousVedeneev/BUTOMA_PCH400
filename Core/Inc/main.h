@@ -167,10 +167,10 @@ void Error_Handler(void);
 #define PWM_4H_GPIO_Port GPIOA
 #define PWM_4L_Pin LL_GPIO_PIN_11
 #define PWM_4L_GPIO_Port GPIOA
-#define O_T_SPI_IN_E_Pin LL_GPIO_PIN_4
-#define O_T_SPI_IN_E_GPIO_Port GPIOD
-#define O_T_SPI_SOEN_Pin LL_GPIO_PIN_6
+#define O_T_SPI_SOEN_Pin LL_GPIO_PIN_4
 #define O_T_SPI_SOEN_GPIO_Port GPIOD
+#define O_T_SPI_IN_E_Pin LL_GPIO_PIN_6
+#define O_T_SPI_IN_E_GPIO_Port GPIOD
 #define O_D_SPI_SR_Pin LL_GPIO_PIN_7
 #define O_D_SPI_SR_GPIO_Port GPIOD
 
