@@ -270,6 +270,15 @@ void Program_ParamSetToDefault()
     programStruct.setup.U_out = 120;
     programStruct.setup.PWM_freq = 8000;
 
+    // Regul -----------------------------------------------------------
+    for (uint8_t phase = 0; phase < PROGRAM_FHASE_COUNT; phase++)
+    {
+        programStruct.setup.RegU_kp[phase]  = 1.0f;
+        programStruct.setup.RegU_ki[phase]  = 1.0f;
+        programStruct.setup.RegU_max[phase] = 1.0f;
+    }
+    programStruct.setup.ZI_setting = 1.0f;
+
     return;
 }
 
@@ -682,12 +691,17 @@ __STATIC_INLINE void Program_regulatorInit()
 {
     for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
     {
+        programStruct.control.sau.voltageRegulator[phase].k_P    = programStruct.setup.RegU_kp[phase];
+        programStruct.control.sau.voltageRegulator[phase].k_Int  = programStruct.setup.RegU_ki[phase];
+        programStruct.control.sau.voltageRegulator[phase].period = (1.0f/(float)programStruct.setup.PWM_freq);
+
         programStruct.control.sau.voltageRegulator[phase].IntMin = 0.0f;
-        programStruct.control.sau.voltageRegulator[phase].IntMax = 1.0f;
+        programStruct.control.sau.voltageRegulator[phase].IntMax = programStruct.setup.RegU_max[phase];
         programStruct.control.sau.voltageRegulator[phase].OutMin = 0.0f;
-        programStruct.control.sau.voltageRegulator[phase].OutMax = 1.0f;
-        
+        programStruct.control.sau.voltageRegulator[phase].OutMax = programStruct.setup.RegU_max[phase];
     }
+
+    dsp_intensSetterSetup(&programStruct.control.sau.ZI, programStruct.setup.ZI_setting, programStruct.control.sau.voltageRegulator[0].period);
 }
 
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff)

@@ -33,33 +33,47 @@ float dsp_regulatorProcess(dsp_regulator_typedef *r)
     return outTmp;
 }
 
-void dsp_regulatorReset(dsp_regulator_typedef *r){
+void dsp_regulatorReset(dsp_regulator_typedef *r)
+{
   r->In = 0.0f;
   r->Fb = 0.0f;
   r->d = 0.0f;
   r->P = 0.0f;
   r->Int = r->IntMin;
   r->Out = r->OutMin;
+  return;
 }
 
-void dsp_intensSetterSetup(dsp_intensSetter_typedef* intens, float setting, float period){
+void dsp_intensSetterSetup(dsp_intensSetter_typedef* intens, float setting, float period)
+{
 
     intens->settings = setting;
     intens->period = period;
     intens->step = setting*period;
+    return;
 }
 
-void dsp_intensSetterUpProcess(dsp_intensSetter_typedef* intens){
-  if(intens->in > intens->out) intens->out+=intens->step;
-  else if(intens->in < intens->out) intens->out = intens->in;
+void dsp_intensSetterUpProcess(dsp_intensSetter_typedef* intens)
+{
+  if(intens->in > intens->out) 
+  {
+    intens->out += intens->step;
+  }
+  else if(intens->in < intens->out)
+  {
+    intens->out = intens->in;
+  }
+  return;
 }
 
-void dsp_intensSetterReset(dsp_intensSetter_typedef* intens){
+void dsp_intensSetterReset(dsp_intensSetter_typedef* intens)
+{
   intens->in = 0.0f;
   intens->out = 0.0f;
 }
 
-float dsp_lineApprox(const dsp_point_typedef* points, uint8_t count, float input){
+float dsp_lineApprox(const dsp_point_typedef* points, uint8_t count, float input)
+{
     //in range
     if(input < points[0].x){
       return points[0].y;
@@ -76,9 +90,10 @@ float dsp_lineApprox(const dsp_point_typedef* points, uint8_t count, float input
     uint8_t idx = 0;
     for (int i = 1; i < count; i++)
     {
-      if(input < points[i].x){
-          idx = i;
-          break;
+      if (input < points[i].x)
+      {
+        idx = i;
+        break;
       }
     }
     

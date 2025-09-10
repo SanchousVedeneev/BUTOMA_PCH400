@@ -74,7 +74,7 @@ typedef enum
 #define PROGRAM_FHASE_V ((uint8_t)1)
 #define PROGRAM_FHASE_W ((uint8_t)2)
 
-
+#define PROGRAM_FHASE_COUNT (3)
 typedef struct           // U1 - U2
 {
     uint8_t invNo1;      // 0 -> L ; 1 -> R
@@ -122,6 +122,7 @@ typedef struct
     uint8_t vodorodStart;
     dsp_regulator_typedef voltageRegulator[3];
     float voltageIn;
+    dsp_intensSetter_typedef ZI;
 }Program_SAU_typedef;
 
 #define PROGRAM_ADC_MAX_FILTER_ORDER (12)
@@ -201,6 +202,12 @@ typedef struct
     uint16_t f_out;
     uint16_t U_out;
     uint16_t PWM_freq;
+
+    float RegU_kp[PROGRAM_FHASE_COUNT];
+    float RegU_ki[PROGRAM_FHASE_COUNT];
+    float RegU_max[PROGRAM_FHASE_COUNT];
+    float ZI_setting;
+
 } Program_PARAM_typedef;
 
 
@@ -211,7 +218,7 @@ typedef struct
     Program_SYS_typedef sys;
     Program_ANALOG_typedef analog;
     Program_SIN_typedef sin;
-    Program_PHASE_typedef phase[3];
+    Program_PHASE_typedef phase[PROGRAM_FHASE_COUNT];
 }Program_typedef;
 
 void Program_start();
