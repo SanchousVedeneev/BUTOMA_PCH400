@@ -206,7 +206,6 @@ typedef struct
     float RegU_kp[PROGRAM_FHASE_COUNT];
     float RegU_ki[PROGRAM_FHASE_COUNT];
     float RegU_max[PROGRAM_FHASE_COUNT];
-    float ZI_setting;
 
 } Program_PARAM_typedef;
 
@@ -242,12 +241,17 @@ uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc);
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff);
 uint8_t Program_LoadDefaultParam_debug();
 
-uint8_t Program_set_k_mod_debug(uint16_t kMod);
-uint8_t Program_сhoice_kPWM_or_kMod_debug(uint16_t choise);
-uint8_t Program_set_phaseCount_debug(uint16_t phaseCount);
-uint8_t Program_set_fOut_debug(uint16_t fOut);
-uint8_t Program_set_uOut_debug(uint16_t uOut);
-uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq);
+uint8_t Program_set_k_mod_debug (uint16_t kMod);
+uint8_t Program_сhoice_kPWM_or_kMod_debug (uint16_t choise);
+uint8_t Program_set_phaseCount_debug (uint16_t phaseCount);
+uint8_t Program_set_fOut_debug (uint16_t fOut);
+uint8_t Program_set_uOut_debug (uint16_t uOut);
+uint8_t Program_set_PWM_freq_debug (uint16_t PWM_freq);
+
+uint8_t Program_set_regul_kp (uint8_t phase_idx, float kp);
+uint8_t Program_set_regul_ki (uint8_t phase_idx, float ki);
+uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max);
+uint8_t Program_set_ZI (uint8_t ZI);
 
 
 void Program_sinBuf_init();

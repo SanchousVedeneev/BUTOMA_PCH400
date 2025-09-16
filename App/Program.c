@@ -255,6 +255,13 @@ __STATIC_INLINE void Program_fastStop(){
 #define PROGRAM_F_OUT_50HZ    (50)
 #define PROGRAM_F_OUT_400HZ   (400)
 
+// PWM_LIST
+#define PROGRAM_PWM_FREQ_4000HZ (4000)
+#define PROGRAM_PWM_FREQ_4800HZ (4800)
+#define PROGRAM_PWM_FREQ_5600HZ (5600)
+#define PROGRAM_PWM_FREQ_6000HZ (6000)
+#define PROGRAM_PWM_FREQ_6400HZ (6400)
+#define PROGRAM_PWM_FREQ_8000HZ (8000)
 void Program_ParamSetToDefault()
 {
     for (uint8_t i = 0; i < PRG_ANALOG_COUNT; i++)
@@ -265,19 +272,19 @@ void Program_ParamSetToDefault()
         programStruct.setup.analog_kMul[i] = 1.0f;
         programStruct.setup.analog_shift[i] = 0;
     }
-    programStruct.setup.phaseCount = 3;
-    programStruct.setup.f_out = 50;
+
+    programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_3;
+    programStruct.setup.f_out = PROGRAM_F_OUT_400HZ;
     programStruct.setup.U_out = 120;
-    programStruct.setup.PWM_freq = 8000;
+    programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ; 
 
     // Regul -----------------------------------------------------------
     for (uint8_t phase = 0; phase < PROGRAM_FHASE_COUNT; phase++)
     {
-        programStruct.setup.RegU_kp[phase]  = 1.0f;
-        programStruct.setup.RegU_ki[phase]  = 1.0f;
+        programStruct.setup.RegU_kp[phase]  = 0.001f;
+        programStruct.setup.RegU_ki[phase]  = 0.001f;
         programStruct.setup.RegU_max[phase] = 1.0f;
     }
-    programStruct.setup.ZI_setting = 1.0f;
 
     return;
 }
@@ -485,12 +492,6 @@ __INLINE uint8_t Program_set_uOut_debug(uint16_t uOut)
     return 1;
 }
 
-#define PROGRAM_PWM_FREQ_4000HZ (4000)
-#define PROGRAM_PWM_FREQ_4800HZ (4800)
-#define PROGRAM_PWM_FREQ_5600HZ (5600)
-#define PROGRAM_PWM_FREQ_6000HZ (6000)
-#define PROGRAM_PWM_FREQ_6400HZ (6400)
-#define PROGRAM_PWM_FREQ_8000HZ (8000)
 __INLINE uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq)
 {
     if (programStruct.control.step != step_debug)
@@ -525,6 +526,70 @@ __INLINE uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq)
     }
 
     return 1;
+}
+
+#define PROGRAM_REGUL_KP_MIN (0.0f)
+#define PROGRAM_REGUL_KP_MAX (0.05f)
+__INLINE uint8_t Program_set_regul_kp (uint8_t phase_idx, float kp)
+{
+    if ((programStruct.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
+    {
+        return 0;
+    }
+    
+    if (kp < PROGRAM_REGUL_KP_MIN)
+    {
+        kp = PROGRAM_REGUL_KP_MIN;
+    }
+    else if (kp > PROGRAM_REGUL_KP_MAX)
+    {
+        kp = PROGRAM_REGUL_KP_MAX;
+    }
+    programStruct.setup.RegU_kp[phase_idx] = kp;
+    return 1;
+}
+
+#define PROGRAM_REGUL_KI_MIN (0.0f)
+#define PROGRAM_REGUL_KI_MAX (0.05f)
+__INLINE uint8_t Program_set_regul_ki (uint8_t phase_idx, float ki)
+{
+    if ((programStruct.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
+    {
+        return 0;
+    }
+    
+    if (ki < PROGRAM_REGUL_KI_MIN)
+    {
+        ki = PROGRAM_REGUL_KI_MIN;
+    }
+    else if (ki > PROGRAM_REGUL_KI_MAX)
+    {
+        ki = PROGRAM_REGUL_KI_MAX;
+    }
+    programStruct.setup.RegU_ki[phase_idx] = ki;
+    return 1;
+}
+
+#define PROGRAM_REGUL_U_OUT_MIN (0.0f)
+#define PROGRAM_REGUL_U_OUT_MAX (1.0f)
+uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max)
+{
+    if ((programStruct.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
+    {
+        return 0;
+    }
+
+    if (uOut_max < PROGRAM_REGUL_U_OUT_MIN)
+    {
+        uOut_max = PROGRAM_REGUL_U_OUT_MIN;
+    }
+    else if (uOut_max > PROGRAM_REGUL_U_OUT_MAX)
+    {
+        uOut_max = PROGRAM_REGUL_U_OUT_MAX;
+    }
+    programStruct.setup.U_out = uOut_max;
+    return 1;
+
 }
 
 __INLINE uint8_t Program_GoReset()
@@ -569,8 +634,10 @@ __INLINE void Program_switchTarget(Program_TARGET_typedef newTarget)
 //------------  ФУНКЦИИ КОНЕЦ ------------//
 
 //------------   Задача 1 кГц   ------------//
+#define PROGRAM_UPDATE_MDB (50)
 void bsp_sys_tick_1k_callback()
 {
+    static uint8_t i = 0;
     // Проверка нажатия Аварийного стопа
     // В отладочном режиме аварийный стоп не работает!
     // if ((Program_checkDin(prg_din3_ALARM_STOP) == PRG_DIN_ALARM_STOP_VAL) &&
@@ -591,7 +658,11 @@ void bsp_sys_tick_1k_callback()
     // }
 
     // обновить состояние буферов Modbus Slave
-    protocolMbRtuSlaveCtrl_update_tables();
+    if (i++ > PROGRAM_UPDATE_MDB)
+    {
+        protocolMbRtuSlaveCtrl_update_tables();
+        i = 0;
+    }
     
     asm("NOP");
     switch (programStruct.control.step)
@@ -691,17 +762,44 @@ __STATIC_INLINE void Program_regulatorInit()
 {
     for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
     {
-        programStruct.control.sau.voltageRegulator[phase].k_P    = programStruct.setup.RegU_kp[phase];
-        programStruct.control.sau.voltageRegulator[phase].k_Int  = programStruct.setup.RegU_ki[phase];
-        programStruct.control.sau.voltageRegulator[phase].period = (1.0f/(float)programStruct.setup.PWM_freq);
+        programStruct.control.sau.voltageRegulator[phase].k_P   = programStruct.setup.RegU_kp[phase];
+        programStruct.control.sau.voltageRegulator[phase].k_Int = programStruct.setup.RegU_ki[phase];
+
+        switch (programStruct.setup.PWM_freq)
+        {
+        case PROGRAM_PWM_FREQ_4000HZ:
+            programStruct.control.sau.voltageRegulator[phase].period = 0.00025f;
+            break;
+        case PROGRAM_PWM_FREQ_4800HZ:
+            programStruct.control.sau.voltageRegulator[phase].period = 0.0002083f;
+            break;
+        case PROGRAM_PWM_FREQ_5600HZ:
+            programStruct.control.sau.voltageRegulator[phase].period = 0.0001786f;
+            break;
+        case PROGRAM_PWM_FREQ_6000HZ:
+            programStruct.control.sau.voltageRegulator[phase].period = 0.0001667f;
+            break;
+        case PROGRAM_PWM_FREQ_6400HZ:
+            programStruct.control.sau.voltageRegulator[phase].period = 0.00015625;
+            break;
+        case PROGRAM_PWM_FREQ_8000HZ:
+            programStruct.control.sau.voltageRegulator[phase].period = 0.000125f;
+            break;
+        default:
+            programStruct.control.sau.voltageRegulator[phase].period = 0.00025f;
+            break;
+        }
 
         programStruct.control.sau.voltageRegulator[phase].IntMin = 0.0f;
         programStruct.control.sau.voltageRegulator[phase].IntMax = programStruct.setup.RegU_max[phase];
         programStruct.control.sau.voltageRegulator[phase].OutMin = 0.0f;
         programStruct.control.sau.voltageRegulator[phase].OutMax = programStruct.setup.RegU_max[phase];
+
+        programStruct.control.sau.voltageRegulator[phase].In = programStruct.setup.U_out;
+        
     }
 
-    dsp_intensSetterSetup(&programStruct.control.sau.ZI, programStruct.setup.ZI_setting, programStruct.control.sau.voltageRegulator[0].period);
+    dsp_intensSetterSetup(&programStruct.control.sau.ZI, programStruct.setup.U_out, programStruct.control.sau.voltageRegulator[0].period);
 }
 
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff)
