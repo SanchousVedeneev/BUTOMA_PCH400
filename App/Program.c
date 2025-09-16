@@ -28,6 +28,209 @@ extern bsp_analogIn_typedef bsp_analogIn_struct;
 // --------------------- EXTERN END---------------------//
 
 /*----------------------------- STEPS ---------------------------------*/
+#define PROGRAM_PWM_ON  (1)
+#define PROGRAM_PWM_OFF (0)
+
+#define PROGRAM_SETUP_VOLTAGE_OK_ERR (1.0f)
+
+#define TIMER_CHECK_UDC (1000)
+#define TIMER_VOLTAGE_UP (1000)
+#define TIMER_WAIT_AC_OK (2000)
+__STATIC_INLINE void __stepCheckUdc()
+{
+    static uint16_t timerCheckUdc = 0;
+
+
+    // Button Stop
+    if (Program_checkDin(prg_din2_Stop) == PRG_DIN_STOP_VAL)
+    {
+        Program_switchTarget(target_waitOp);
+    }
+
+    // Check error
+    if (programStruct.analog.aIn[prg_analog_Uzpt_inv_L].value < 480.0f)
+    {
+        // @do
+        //Program_setError(error_vodorod_bat_not_connect);
+    }
+    else if ((programStruct.setup.phaseCount > 1) && (programStruct.analog.aIn[prg_analog_Uzpt_inv_R].value < 480.0f))
+    {
+        // @do
+        //Program_setError(error_vodorod_bat_not_connect);
+    }
+
+
+    // Check target and program timer
+    if (programStruct.control.target == target_Work) 
+    {
+        if (timerCheckUdc++ < TIMER_CHECK_UDC)
+        {
+            return;
+        }
+        else
+        {
+            // set zero pwm, regulators and intensSetter
+            for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
+            {
+                setPhasePWM(&programStruct.phase[phase], 0.0f);
+                programStruct.phase[phase].k_modOut = 0.0f;
+                dsp_regulatorReset(&programStruct.control.sau.voltageRegulator[phase]);
+            }
+            dsp_intensSetterReset(&programStruct.control.sau.ZI);
+
+            Program_setDout(prg_dout5_KM1);
+            Program_pwmOutsControl(bsp_pwm_outs_group_123, PROGRAM_PWM_ON);
+            Program_pwmOutsControl(bsp_pwm_outs_group_456, PROGRAM_PWM_ON);
+        }
+    }
+    timerCheckUdc = 0;
+
+    // Switch
+    switch (programStruct.control.target)
+    {
+    case target_Work:
+        programStruct.control.step = step_Voltage_Up; 
+        break;    
+    case target_waitOp:
+        programStruct.control.step = step_Stop; 
+        break;
+    case target_error:
+        programStruct.control.step = step_error;
+        break;
+    default:
+        break;
+    }
+}
+__STATIC_INLINE void __stepVoltageUp()
+{
+    static dsp_regulator_typedef* reg = NULL;
+    static uint16_t timerVoltageUp = 0;
+    static uint16_t timerWaitAcOk = 0;
+    float voltage_in = 0.0f;
+    uint8_t uFlag[3] = {[0 ... 2] = RESET};
+
+    // Button Stop
+    if (Program_checkDin(prg_din2_Stop) == PRG_DIN_STOP_VAL)
+    {
+        Program_switchTarget(target_waitOp);
+    }
+
+     // Check error
+
+    if (programStruct.control.target == target_Work)
+    {
+        programStruct.control.sau.ZI.in = programStruct.setup.U_out;
+        dsp_intensSetterUpProcess(&programStruct.control.sau.ZI);
+        voltage_in = programStruct.control.sau.ZI.out;
+
+        for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
+        {
+            reg = &programStruct.control.sau.voltageRegulator[phase];
+            reg->In = voltage_in;
+            reg->Fb = *programStruct.phase[phase].voltageFb;
+            programStruct.phase[phase].k_modOut = dsp_regulatorProcess(reg);
+
+            if (voltage_in == programStruct.setup.U_out) // задатчик вышел
+            {
+                if (reg->d < PROGRAM_SETUP_VOLTAGE_OK_ERR)
+                {
+                    uFlag[phase] = SET;
+                    if ((uFlag[0] + uFlag[1] + uFlag[2]) == programStruct.setup.phaseCount)
+                    {
+                        timerWaitAcOk = 0;
+                        if (timerVoltageUp++ < TIMER_VOLTAGE_UP)
+                        {
+                            return;
+                        }
+                        timerVoltageUp = 0;
+                        Program_setDout(prg_dout6_KM2);
+                        Program_setDout(prg_dout2_LampWork);
+                    }
+                }
+                else if (timerWaitAcOk++ >= TIMER_WAIT_AC_OK)
+                {
+                    timerWaitAcOk = 0;
+                    timerVoltageUp = 0;
+                    // @do
+                    // здесь формируется ошибка
+                    // Program_setError(error_vodorod_u_out_low);
+                }
+                else
+                {
+                    return;
+                }
+            }
+            else
+            {
+                return;
+            }
+        }
+    }
+    timerWaitAcOk = 0;
+    timerVoltageUp = 0;
+
+    // Switch
+    switch (programStruct.control.target)
+    {
+    case target_Work:
+        programStruct.control.step = step_Work; 
+        break;    
+    case target_waitOp:
+        programStruct.control.step = step_Stop; 
+        break;
+    case target_error:
+        programStruct.control.step = step_error;
+        break;
+    default:
+        break;
+    }
+}
+__STATIC_INLINE void __stepWork()
+{
+    // Button Stop
+    if (Program_checkDin(prg_din2_Stop) == PRG_DIN_STOP_VAL)
+    {
+        Program_switchTarget(target_waitOp);
+    }
+
+    // Check error
+
+    // Switch
+    switch (programStruct.control.target)
+    { 
+    case target_waitOp:
+        programStruct.control.step = step_Stop; 
+        break;
+    case target_error:
+        programStruct.control.step = step_error;
+        break;
+    default:
+        break;
+    }
+}
+__STATIC_INLINE void __stepStop()
+{
+    // @do 
+    // подумать, что еще можно сюда дописать
+    Program_pwmOutsControl(bsp_pwm_outs_group_123, PROGRAM_PWM_OFF);
+    Program_pwmOutsControl(bsp_pwm_outs_group_456, PROGRAM_PWM_OFF);
+    bsp_dInOut_setDouts1_10(0);
+
+    // Switch
+    switch (programStruct.control.target)
+    { 
+    case target_waitOp:
+        programStruct.control.step = step_waitOp; 
+        break;
+    case target_error:
+        programStruct.control.step = step_error;
+        break;
+    default:
+        break;
+    }
+}
+
+
 #define PRG_LED_FAULT_BLINK_PERIOD (200)
 __STATIC_INLINE void __stepWaitInit()
 {
@@ -71,7 +274,7 @@ for (uint8_t i = 0; i < 24; i++)
     switch (programStruct.control.target)
     {
     case target_waitOp:
-        programStruct.control.step = step_wait_op; // ------->
+        programStruct.control.step = step_waitOp; // ------->
         break;
     
     default:
@@ -286,6 +489,8 @@ void Program_ParamSetToDefault()
         programStruct.setup.RegU_max[phase] = 1.0f;
     }
 
+    // @do
+    // уставки для формирования аварий
     return;
 }
 
@@ -316,7 +521,7 @@ uint8_t Program_ParamSave()
 
 __INLINE uint8_t Program_GoDebug()
 {
-    if ((programStruct.control.step != step_wait_op) && (programStruct.control.step != step_error))
+    if ((programStruct.control.step != step_waitOp) && (programStruct.control.step != step_error))
     {
         return 0;
     }
@@ -481,12 +686,10 @@ __INLINE uint8_t Program_set_uOut_debug(uint16_t uOut)
     if (uOut <= PROGRAM_U_OUT_MIN)
     {
         uOut = PROGRAM_U_OUT_MIN;
-        return 0;
     }
     else if (uOut >= PROGRAM_U_OUT_MAX)
     {
         uOut = PROGRAM_U_OUT_MAX;
-        return 0;
     }
     programStruct.setup.U_out = uOut;
     return 1;
@@ -587,7 +790,7 @@ uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max)
     {
         uOut_max = PROGRAM_REGUL_U_OUT_MAX;
     }
-    programStruct.setup.U_out = uOut_max;
+    programStruct.setup.RegU_max[phase_idx] = uOut_max;
     return 1;
 
 }
@@ -635,35 +838,35 @@ __INLINE void Program_switchTarget(Program_TARGET_typedef newTarget)
 
 //------------   Задача 1 кГц   ------------//
 #define PROGRAM_UPDATE_MDB (50)
+#define PROGRAM_WAIT_START (1000)
 void bsp_sys_tick_1k_callback()
 {
-    static uint8_t i = 0;
-    // Проверка нажатия Аварийного стопа
-    // В отладочном режиме аварийный стоп не работает!
-    // if ((Program_checkDin(prg_din3_ALARM_STOP) == PRG_DIN_ALARM_STOP_VAL) &&
-    //     (programStruct.control.target != target_debug))
-    // {
-    //     if (Program_setError(error_fastStop))
-    //     {
-    //         programStruct.control.step = step_error;
-    //     }
-    // }
+    static uint8_t count_mdb_update = 0;
+    static uint16_t count_button_start = 0;
 
-    // Пуск водорода от кнопки Start, только из target_waitOp и step_wait_op 
-    // if ((Program_checkDin(prg_din1_PUSK) == PRG_DIN_PUSK_VAL) &&
-    //     (programStruct.control.target == target_waitOp) && 
-    //     (programStruct.control.step == step_wait_op))
-    // {
-    //     Program_switchTarget(target_vodorodWork);
-    // }
+    // Пуск ПЧ от кнопки Start, только из target_waitOp и step_wait_op 
+    if ((Program_checkDin(prg_din1_Pusk) == PRG_DIN_PUSK_VAL) &&
+        (programStruct.control.target == target_waitOp) && 
+        (programStruct.control.step == step_waitOp))
+    {
+        if (count_button_start++ > PROGRAM_WAIT_START)
+        {
+            Program_switchTarget(target_Work);
+        }
+    }
+    else
+    {
+        count_button_start = 0;
+    }
+
 
     // обновить состояние буферов Modbus Slave
-    if (i++ > PROGRAM_UPDATE_MDB)
+    if (count_mdb_update++ > PROGRAM_UPDATE_MDB)
     {
         protocolMbRtuSlaveCtrl_update_tables();
-        i = 0;
+        count_mdb_update = 0;
     }
-    
+
     asm("NOP");
     switch (programStruct.control.step)
     {
@@ -673,7 +876,7 @@ void bsp_sys_tick_1k_callback()
     case step_init:
         __stepInit();
         break;
-    case step_wait_op:
+    case step_waitOp:
         __stepWaitOp();
         break;
     case step_debug:
@@ -685,6 +888,20 @@ void bsp_sys_tick_1k_callback()
     case step_error:
         __stepError();
         break;
+
+    case step_Check_Udc:
+        __stepCheckUdc();
+        break;
+    case step_Voltage_Up:
+        __stepVoltageUp();
+        break;
+    case step_Work:
+        __stepWork();
+        break;
+    case step_Stop:
+        __stepStop();
+        break;
+
     default:
         break;
     }
@@ -757,7 +974,8 @@ __STATIC_INLINE void Program_pwmInit()
 
     bsp_pwm_start_IRQ_123_IRQ_456();
 }
-
+ 
+#define PROGRAM_PERIOD_1K_CALBACK (0.001f)
 __STATIC_INLINE void Program_regulatorInit()
 {
     for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
@@ -799,7 +1017,7 @@ __STATIC_INLINE void Program_regulatorInit()
         
     }
 
-    dsp_intensSetterSetup(&programStruct.control.sau.ZI, programStruct.setup.U_out, programStruct.control.sau.voltageRegulator[0].period);
+    dsp_intensSetterSetup(&programStruct.control.sau.ZI, programStruct.setup.U_out, PROGRAM_PERIOD_1K_CALBACK);
 }
 
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff)
@@ -987,8 +1205,15 @@ uint8_t Program_analogSetFilterN(Program_ANALOG_ENUM_typedef idx, uint16_t filte
         return 0;
     }
 
-    if(filterN < 1 ) filterN = 1;
-    else if (filterN > 350) filterN = 350;
+    if(filterN < 1 )
+    {
+        filterN = 1;
+    } 
+    else if (filterN > PROGRAM_ADC_MAX_FILTER_N)
+    {
+        filterN = PROGRAM_ADC_MAX_FILTER_N;
+    }
+
     programStruct.setup.analog_filter_N[idx] = filterN;
     return 1;
 }

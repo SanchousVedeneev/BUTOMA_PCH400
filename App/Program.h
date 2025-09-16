@@ -13,7 +13,11 @@ typedef enum{
     step_debug,
     step_reset,
     step_error,
-    step_wait_op,
+    step_waitOp,
+    step_Check_Udc,
+    step_Voltage_Up,
+    step_Work,
+    step_Stop
 }Program_STEP_typedef;
 
 //Targets
@@ -21,21 +25,29 @@ typedef enum{
     target_debug = 1,
     target_waitOp,
     target_reset,
-    target_error
+    target_error,
+    target_Work
 }Program_TARGET_typedef;
 
 //Errors
 typedef enum{
     error_noError = 0,
-    error_fastStop
+    error_Uzpt_L_low,
+    error_Uzpt_L_high,
+    error_Uzpt_R_low,
+    error_Uzpt_L_high
 }Program_ERROR_typedef;
 
+
+#define PRG_DIN_PUSK_VAL (1)
+#define PRG_DIN_STOP_VAL (0)
+#define PRG_DIN_KT_ON (0)
 typedef enum
 {
-	prg_din1_UNUSED,       // 0
-	prg_din2_UNUSED,       // 1
-	prg_din3_UNUSED,       // 2
-	prg_din4_UNUSED,       // 3
+	prg_din1_Pusk,        // 0
+	prg_din2_Stop,        // 1
+	prg_din3_TV_KT1,       // 2
+	prg_din4_TV_KT2,       // 3
 	prg_din5_UNUSED,       // 4
 	prg_din6_UNUSED,       // 5
 	prg_din7_UNUSED,       // 6
@@ -46,13 +58,13 @@ typedef enum
 
 typedef enum
 {
-	prg_dout1_UNUSED,    // 0
-	prg_dout2_UNUSED,    // 1
-	prg_dout3_UNUSED,    // 2
-	prg_dout4_UNUSED,    // 3
-	prg_dout5_UNUSED,    // 4
-	prg_dout6_UNUSED,    // 5
-	prg_dout7_UNUSED,    // 6
+	prg_dout1_LampReady,    // 0
+	prg_dout2_LampWork,    // 1
+	prg_dout3_LampOverheat,    // 2
+	prg_dout4_LampFaulth,    // 3
+	prg_dout5_KM1,    // 4
+	prg_dout6_KM2,    // 5
+	prg_dout7_FanPower,    // 6
 	prg_dout8_UNUSED,    // 7
 	prg_dout9_UNUSED,    // 8
 	prg_dout10_UNUSED    // 9
@@ -80,7 +92,7 @@ typedef struct           // U1 - U2
     uint8_t invNo1;      // 0 -> L ; 1 -> R
     uint8_t channelNo1;  // [0 1 2] -> [U V W]
     uint8_t invNo2;      // 0 -> L ; 1 -> R
-    uint8_t channelNo2;  // [0 1 2] -> [U V W]
+    uint8_t channelNo2;  // [3 4 5] -> [U V W]
     float k_modOut;
     float *voltageFb;
 }Program_PHASE_typedef;
@@ -119,13 +131,13 @@ typedef struct
 
 typedef struct
 {
-    uint8_t vodorodStart;
     dsp_regulator_typedef voltageRegulator[3];
     float voltageIn;
     dsp_intensSetter_typedef ZI;
 }Program_SAU_typedef;
 
 #define PROGRAM_ADC_MAX_FILTER_ORDER (12)
+#define PROGRAM_ADC_MAX_FILTER_N     (255)
 typedef struct
 {
        float value;

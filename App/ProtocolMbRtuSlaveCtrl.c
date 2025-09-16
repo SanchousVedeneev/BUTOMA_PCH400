@@ -297,21 +297,21 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   StopIdx  = tab_regul_u_kP_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].k_P);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].k_P*kMul_1000);
   }
 
   StartIdx = tab_regul_u_kI_phase_0;
   StopIdx  = tab_regul_u_kI_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].k_Int);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].k_Int*kMul_1000);
   }
 
   StartIdx = tab_regul_u_outMax_phase_0;
   StopIdx  = tab_regul_u_outMax_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].OutMax);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].OutMax*kMul_1000);
   }
 }
 //------------------------ REGULAR FCN END------------------------
