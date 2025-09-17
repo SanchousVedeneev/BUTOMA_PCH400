@@ -1,10 +1,8 @@
-
-
 #include "Program.h"
 #include "ProtocolMbRtuSlaveCtrl.h"
 #include "FlashWorker.h"
 
-Program_typedef programStruct;
+Program_typedef program;
 
 /*----------------------------- PRIVATE FCN MACRO DCL ---------------------------------*/
 __STATIC_INLINE uint8_t Program_analogInit();
@@ -32,10 +30,13 @@ extern bsp_analogIn_typedef bsp_analogIn_struct;
 #define PROGRAM_PWM_OFF (0)
 
 #define PROGRAM_SETUP_VOLTAGE_OK_ERR (1.0f)
+#define PROGRAM_I_AC_K_OVERLOAD      (1.3f)
+#define PROGRAM_TIMER_I_AC_OVERLOAD  (10)
 
-#define TIMER_CHECK_UDC (1000)
-#define TIMER_VOLTAGE_UP (1000)
-#define TIMER_WAIT_AC_OK (2000)
+
+#define PROGRAM_TIMER_CHECK_UDC (1000)
+#define PROGRAM_TIMER_VOLTAGE_UP (1000)
+#define PROGRAM_TIMER_WAIT_AC_OK (3000)
 __STATIC_INLINE void __stepCheckUdc()
 {
     static uint16_t timerCheckUdc = 0;
@@ -48,35 +49,42 @@ __STATIC_INLINE void __stepCheckUdc()
     }
 
     // Check error
-    if (programStruct.analog.aIn[prg_analog_Uzpt_inv_L].value < 480.0f)
+    if (program.analog.aIn[prg_analog_Udc_invL].value < program.setup.Udc_low)
     {
-        // @do
-        //Program_setError(error_vodorod_bat_not_connect);
+        Program_setError(error_Udc_L_low);
     }
-    else if ((programStruct.setup.phaseCount > 1) && (programStruct.analog.aIn[prg_analog_Uzpt_inv_R].value < 480.0f))
+    if (program.analog.aIn[prg_analog_Udc_invL].value > program.setup.Udc_high)
     {
-        // @do
-        //Program_setError(error_vodorod_bat_not_connect);
+        Program_setError(error_Udc_L_high);
     }
-
+    if (program.setup.phaseCount > 1)
+    {
+        if (program.analog.aIn[prg_analog_Udc_invR].value < program.setup.Udc_low)
+        {
+            Program_setError(error_Udc_R_low);  
+        }
+        else if (program.analog.aIn[prg_analog_Udc_invR].value > program.setup.Udc_high)
+        {
+            Program_setError(error_Udc_R_high); 
+        }
+    } 
 
     // Check target and program timer
-    if (programStruct.control.target == target_Work) 
+    if (program.control.target == target_Work) 
     {
-        if (timerCheckUdc++ < TIMER_CHECK_UDC)
+        if (timerCheckUdc++ < PROGRAM_TIMER_CHECK_UDC)
         {
             return;
         }
         else
         {
             // set zero pwm, regulators and intensSetter
-            for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
+            for (uint8_t phase = 0; phase < program.setup.phaseCount; phase++)
             {
-                setPhasePWM(&programStruct.phase[phase], 0.0f);
-                programStruct.phase[phase].k_modOut = 0.0f;
-                dsp_regulatorReset(&programStruct.control.sau.voltageRegulator[phase]);
+                program.phase[phase].k_modOut = 0.0f;
+                dsp_regulatorReset(&program.control.sau.voltageRegulator[phase]);
             }
-            dsp_intensSetterReset(&programStruct.control.sau.ZI);
+            dsp_intensSetterReset(&program.control.sau.ZI);
 
             Program_setDout(prg_dout5_KM1);
             Program_pwmOutsControl(bsp_pwm_outs_group_123, PROGRAM_PWM_ON);
@@ -86,16 +94,16 @@ __STATIC_INLINE void __stepCheckUdc()
     timerCheckUdc = 0;
 
     // Switch
-    switch (programStruct.control.target)
+    switch (program.control.target)
     {
     case target_Work:
-        programStruct.control.step = step_Voltage_Up; 
+        program.control.step = step_Voltage_Up; 
         break;    
     case target_waitOp:
-        programStruct.control.step = step_Stop; 
+        program.control.step = step_Stop; 
         break;
     case target_error:
-        programStruct.control.step = step_error;
+        program.control.step = step_error;
         break;
     default:
         break;
@@ -103,9 +111,10 @@ __STATIC_INLINE void __stepCheckUdc()
 }
 __STATIC_INLINE void __stepVoltageUp()
 {
-    static dsp_regulator_typedef* reg = NULL;
+    static uint16_t timer_Iac_overload[PROGRAM_FHASE_COUNT] = {[0 ... 2] = 0};
     static uint16_t timerVoltageUp = 0;
-    static uint16_t timerWaitAcOk = 0;
+    static uint16_t timerWaitAcOk[PROGRAM_FHASE_COUNT] = {[0 ... 2] = 0};
+
     float voltage_in = 0.0f;
     uint8_t uFlag[3] = {[0 ... 2] = RESET};
 
@@ -115,45 +124,123 @@ __STATIC_INLINE void __stepVoltageUp()
         Program_switchTarget(target_waitOp);
     }
 
-     // Check error
-
-    if (programStruct.control.target == target_Work)
+    // Check error
+    if (program.analog.aIn[prg_analog_Udc_invL].value < program.setup.Udc_low)
     {
-        programStruct.control.sau.ZI.in = programStruct.setup.U_out;
-        dsp_intensSetterUpProcess(&programStruct.control.sau.ZI);
-        voltage_in = programStruct.control.sau.ZI.out;
-
-        for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
+        Program_setError(error_Udc_L_low);
+    }
+    if (program.analog.aIn[prg_analog_Udc_invL].value > program.setup.Udc_high)
+    {
+        Program_setError(error_Udc_L_high);
+    }
+    if (program.setup.phaseCount > 1)
+    {
+        if (program.analog.aIn[prg_analog_Udc_invR].value < program.setup.Udc_low)
         {
-            reg = &programStruct.control.sau.voltageRegulator[phase];
-            reg->In = voltage_in;
-            reg->Fb = *programStruct.phase[phase].voltageFb;
-            programStruct.phase[phase].k_modOut = dsp_regulatorProcess(reg);
+            Program_setError(error_Udc_R_low);
+        }
+        else if (program.analog.aIn[prg_analog_Udc_invR].value > program.setup.Udc_high)
+        {
+            Program_setError(error_Udc_R_high);
+        }
+    }
+    
+    if ((program.analog.aIn[prg_analog_I_u].value >= program.setup.Iac_nominal) &&
+        (program.analog.aIn[prg_analog_I_u].value <= program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD))
+    {
+        if (timer_Iac_overload[PROGRAM_FHASE_U]++ > PROGRAM_TIMER_I_AC_OVERLOAD)
+        {
+            Program_setError(error_Iac_U_overload);
+        } 
+    }
+    else
+    {
+        timer_Iac_overload[PROGRAM_FHASE_U] = 0;
+    }
 
-            if (voltage_in == programStruct.setup.U_out) // задатчик вышел
+    if ((program.analog.aIn[prg_analog_I_v].value >= program.setup.Iac_nominal) &&
+        (program.analog.aIn[prg_analog_I_v].value <= program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD))
+    {
+        if (timer_Iac_overload[PROGRAM_FHASE_V]++ > PROGRAM_TIMER_I_AC_OVERLOAD)
+        {
+            Program_setError(error_Iac_V_overload);
+        } 
+    }
+    else
+    {
+        timer_Iac_overload[PROGRAM_FHASE_V] = 0;
+    }
+
+    if ((program.analog.aIn[prg_analog_I_w].value >= program.setup.Iac_nominal) &&
+        (program.analog.aIn[prg_analog_I_w].value <= program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD))
+    {
+        if (timer_Iac_overload[PROGRAM_FHASE_W]++ > PROGRAM_TIMER_I_AC_OVERLOAD)
+        {
+            Program_setError(error_Iac_W_overload);
+        } 
+    }
+    else
+    {
+        timer_Iac_overload[PROGRAM_FHASE_W] = 0;
+    }
+
+    if (program.analog.aIn[prg_analog_I_u].value > program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD)
+    {
+        Program_setError(error_Iac_U_KZ);
+    }
+    if (program.analog.aIn[prg_analog_I_v].value > program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD)
+    {
+        Program_setError(error_Iac_V_KZ);
+    }
+    if (program.analog.aIn[prg_analog_I_w].value > program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD)
+    {
+        Program_setError(error_Iac_W_KZ);
+    }
+
+    if ((bsp_analogIn_struct.currentTemp[0] > program.setup.Tradiator_high) ||
+        (bsp_analogIn_struct.currentTemp[1] > program.setup.Tradiator_high))
+    {
+        Program_setError(error_Tradiator_high);
+    }
+    
+    // VoltageUp process
+    if (program.control.target == target_Work)
+    {
+        program.control.sau.ZI.in = program.setup.U_out;
+        dsp_intensSetterUpProcess(&program.control.sau.ZI);
+        voltage_in = program.control.sau.ZI.out;
+
+        for (uint8_t phase = 0; phase < program.setup.phaseCount; phase++)
+        {
+            program.control.sau.voltageRegulator[phase].In = voltage_in;
+            program.control.sau.voltageRegulator[phase].Fb = *program.phase[phase].voltageFb;
+            program.phase[phase].k_modOut = dsp_regulatorProcess(&program.control.sau.voltageRegulator[phase]);
+            if (voltage_in == program.setup.U_out) // задатчик вышел
             {
-                if (reg->d < PROGRAM_SETUP_VOLTAGE_OK_ERR)
+                if (program.control.sau.voltageRegulator[phase].d < PROGRAM_SETUP_VOLTAGE_OK_ERR)
                 {
                     uFlag[phase] = SET;
-                    if ((uFlag[0] + uFlag[1] + uFlag[2]) == programStruct.setup.phaseCount)
+                    if ((uFlag[0] + uFlag[1] + uFlag[2]) == program.setup.phaseCount)
                     {
-                        timerWaitAcOk = 0;
-                        if (timerVoltageUp++ < TIMER_VOLTAGE_UP)
+                        if (timerVoltageUp++ >= PROGRAM_TIMER_VOLTAGE_UP)
+                        {
+                            Program_setDout(prg_dout6_KM2);
+                            Program_setDout(prg_dout2_LampWork);
+                            Program_setDout(prg_dout7_FanPower);
+                        }
+                        else
                         {
                             return;
                         }
-                        timerVoltageUp = 0;
-                        Program_setDout(prg_dout6_KM2);
-                        Program_setDout(prg_dout2_LampWork);
+                    }
+                    else
+                    {
+                        return;
                     }
                 }
-                else if (timerWaitAcOk++ >= TIMER_WAIT_AC_OK)
+                else if (timerWaitAcOk[phase]++ >= PROGRAM_TIMER_WAIT_AC_OK)
                 {
-                    timerWaitAcOk = 0;
-                    timerVoltageUp = 0;
-                    // @do
-                    // здесь формируется ошибка
-                    // Program_setError(error_vodorod_u_out_low);
+                    Program_setError(error_Uac_voltageUp);
                 }
                 else
                 {
@@ -166,20 +253,22 @@ __STATIC_INLINE void __stepVoltageUp()
             }
         }
     }
-    timerWaitAcOk = 0;
+    timerWaitAcOk[0] = 0;
+    timerWaitAcOk[1] = 0;
+    timerWaitAcOk[2] = 0;
     timerVoltageUp = 0;
 
     // Switch
-    switch (programStruct.control.target)
+    switch (program.control.target)
     {
     case target_Work:
-        programStruct.control.step = step_Work; 
-        break;    
+        program.control.step = step_Work;
+        break;
     case target_waitOp:
-        programStruct.control.step = step_Stop; 
+        program.control.step = step_Stop;
         break;
     case target_error:
-        programStruct.control.step = step_error;
+        program.control.step = step_error;
         break;
     default:
         break;
@@ -187,22 +276,131 @@ __STATIC_INLINE void __stepVoltageUp()
 }
 __STATIC_INLINE void __stepWork()
 {
+    static uint16_t timer_Iac_overload[PROGRAM_FHASE_COUNT] = {[0 ... 2] = 0};
+    float Utemp = 0;
+
     // Button Stop
     if (Program_checkDin(prg_din2_Stop) == PRG_DIN_STOP_VAL)
     {
         Program_switchTarget(target_waitOp);
     }
 
-    // Check error
+  // Check error
+    if (program.analog.aIn[prg_analog_Udc_invL].value < program.setup.Udc_low)
+    {
+        Program_setError(error_Udc_L_low);
+    }
+    if (program.analog.aIn[prg_analog_Udc_invL].value > program.setup.Udc_high)
+    {
+        Program_setError(error_Udc_L_high);
+    }
+    if (program.setup.phaseCount > 1)
+    {
+        if (program.analog.aIn[prg_analog_Udc_invR].value < program.setup.Udc_low)
+        {
+            Program_setError(error_Udc_R_low);
+        }
+        else if (program.analog.aIn[prg_analog_Udc_invR].value > program.setup.Udc_high)
+        {
+            Program_setError(error_Udc_R_high);
+        }
+    }
+    
+    if ((program.analog.aIn[prg_analog_I_u].value >= program.setup.Iac_nominal) &&
+        (program.analog.aIn[prg_analog_I_u].value <= program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD))
+    {
+        if (timer_Iac_overload[PROGRAM_FHASE_U]++ > PROGRAM_TIMER_I_AC_OVERLOAD)
+        {
+            Program_setError(error_Iac_U_overload);
+        } 
+    }
+    else
+    {
+        timer_Iac_overload[PROGRAM_FHASE_U] = 0;
+    }
+
+    if ((program.analog.aIn[prg_analog_I_v].value >= program.setup.Iac_nominal) &&
+        (program.analog.aIn[prg_analog_I_v].value <= program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD))
+    {
+        if (timer_Iac_overload[PROGRAM_FHASE_V]++ > PROGRAM_TIMER_I_AC_OVERLOAD)
+        {
+            Program_setError(error_Iac_V_overload);
+        } 
+    }
+    else
+    {
+        timer_Iac_overload[PROGRAM_FHASE_V] = 0;
+    }
+
+    if ((program.analog.aIn[prg_analog_I_w].value >= program.setup.Iac_nominal) &&
+        (program.analog.aIn[prg_analog_I_w].value <= program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD))
+    {
+        if (timer_Iac_overload[PROGRAM_FHASE_W]++ > PROGRAM_TIMER_I_AC_OVERLOAD)
+        {
+            Program_setError(error_Iac_W_overload);
+        } 
+    }
+    else
+    {
+        timer_Iac_overload[PROGRAM_FHASE_W] = 0;
+    }
+
+    if (program.analog.aIn[prg_analog_I_u].value > program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD)
+    {
+        Program_setError(error_Iac_U_KZ);
+    }
+    if (program.analog.aIn[prg_analog_I_v].value > program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD)
+    {
+        Program_setError(error_Iac_V_KZ);
+    }
+    if (program.analog.aIn[prg_analog_I_w].value > program.setup.Iac_nominal*PROGRAM_I_AC_K_OVERLOAD)
+    {
+        Program_setError(error_Iac_W_KZ);
+    }
+
+    Utemp = program.analog.aIn[prg_analog_I_u].value;
+    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok)) ||
+        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok)))
+    {
+        Program_setError(error_Uac_U_no_ok);
+    }
+
+    Utemp = program.analog.aIn[prg_analog_I_v].value;
+    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok)) ||
+        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok)))
+    {
+        Program_setError(error_Uac_V_no_ok);
+    }
+
+    Utemp = program.analog.aIn[prg_analog_I_w].value;
+    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok)) ||
+        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok)))
+    {
+        Program_setError(error_Uac_W_no_ok);
+    }
+
+    if ((bsp_analogIn_struct.currentTemp[0] > program.setup.Tradiator_high) ||
+        (bsp_analogIn_struct.currentTemp[1] > program.setup.Tradiator_high))
+    {
+        Program_setError(error_Tradiator_high);
+    }
+    
+    // Regulator
+    for (uint8_t phase = 0; phase < program.setup.phaseCount; phase++)
+    {
+        program.control.sau.voltageRegulator[phase].In = program.setup.U_out;
+        program.control.sau.voltageRegulator[phase].Fb = *program.phase[phase].voltageFb;
+        program.phase[phase].k_modOut = dsp_regulatorProcess(&program.control.sau.voltageRegulator[phase]);
+    }
 
     // Switch
-    switch (programStruct.control.target)
+    switch (program.control.target)
     { 
     case target_waitOp:
-        programStruct.control.step = step_Stop; 
+        program.control.step = step_Stop; 
         break;
     case target_error:
-        programStruct.control.step = step_error;
+        program.control.step = step_error;
         break;
     default:
         break;
@@ -214,16 +412,24 @@ __STATIC_INLINE void __stepStop()
     // подумать, что еще можно сюда дописать
     Program_pwmOutsControl(bsp_pwm_outs_group_123, PROGRAM_PWM_OFF);
     Program_pwmOutsControl(bsp_pwm_outs_group_456, PROGRAM_PWM_OFF);
+
+    for (uint8_t phase = 0; phase < program.setup.phaseCount; phase++)
+    {
+        program.phase[phase].k_modOut = 0.0f;
+        dsp_regulatorReset(&program.control.sau.voltageRegulator[phase]);
+    }
+    dsp_intensSetterReset(&program.control.sau.ZI);
+
     bsp_dInOut_setDouts1_10(0);
 
     // Switch
-    switch (programStruct.control.target)
+    switch (program.control.target)
     { 
     case target_waitOp:
-        programStruct.control.step = step_waitOp; 
+        program.control.step = step_waitOp; 
         break;
     case target_error:
-        programStruct.control.step = step_error;
+        program.control.step = step_error;
         break;
     default:
         break;
@@ -234,88 +440,74 @@ __STATIC_INLINE void __stepStop()
 #define PRG_LED_FAULT_BLINK_PERIOD (200)
 __STATIC_INLINE void __stepWaitInit()
 {
-
-//---------------- переключатель
-    switch (programStruct.control.target)
+    switch (program.control.target)
     {
     case target_waitOp:
-        programStruct.control.step = step_init; // ------->
+        program.control.step = step_init;
         break;
-    
     default:
         break;
     }
-//---------------- переключатель конец
 }
 __STATIC_INLINE void __stepInit()
 {
-static uint8_t ledCounter = 1;
-static uint16_t timer = 0;
-//------------------  LED BLINK ---------------
-if (((timer++) % 30) == 0)
-{
-    if (ledCounter < 24)
+    static uint8_t ledCounter = 1;
+    static uint16_t timer = 0;
+
+    if (((timer++) % 30) == 0)
     {
-        bsp_dInOut_setDout(bsp_dInOut_led_a1_y + ledCounter);
-        bsp_dInOut_resetDout(bsp_dInOut_led_a1_y + ledCounter-1);
+        if (ledCounter < 24)
+        {
+            bsp_dInOut_setDout(bsp_dInOut_led_a1_y + ledCounter);
+            bsp_dInOut_resetDout(bsp_dInOut_led_a1_y + ledCounter - 1);
+        }
+        ledCounter++;
     }
-    ledCounter++;
-}
 
-if(ledCounter < 25) return;
+    if (ledCounter < 25)
+    {
+        return;
+    }
 
-for (uint8_t i = 0; i < 24; i++)
-{
-    bsp_dInOut_resetDout(bsp_dInOut_led_a1_y + i);
-}
-//------------------  LED BLINK END  ---------------
+    for (uint8_t i = 0; i < 24; i++)
+    {
+        bsp_dInOut_resetDout(bsp_dInOut_led_a1_y + i);
+    }
 
-//---------------- переключатель
-    switch (programStruct.control.target)
+    switch (program.control.target)
     {
     case target_waitOp:
-        programStruct.control.step = step_waitOp; // ------->
+        program.control.step = step_waitOp;
         break;
-    
     default:
         break;
     }
-//---------------- переключатель конец
 }
 __STATIC_INLINE void __stepDebug()
 {
     static uint16_t cnt_led = 0;
 
-//-----------------------  LED BLINK -----------------------
-    if(((cnt_led++)%100)==0){
+    if(((cnt_led++) % 100) == 0)
+    {
         BSP_LED_TOGGLE(BSP_LED_RDY);
     }
-//-----------------------  LED BLINK END-----------------------
 
-//------------------------   DOUTS ------------------------------
-    bsp_dInOut_setDouts1_10(programStruct.control.remote.dout.w16);
-//------------------------   DOUTS END------------------------------
+    bsp_dInOut_setDouts1_10(program.control.remote.dout.w16);
+    Program_pwmOutsControl(bsp_pwm_outs_group_123, program.control.remote.pwmEnable123);
+    Program_pwmOutsControl(bsp_pwm_outs_group_456, program.control.remote.pwmEnable456);
 
-    Program_pwmOutsControl(bsp_pwm_outs_group_123, programStruct.control.remote.pwmEnable123);
-    Program_pwmOutsControl(bsp_pwm_outs_group_456, programStruct.control.remote.pwmEnable456);
-//---------------- переключатель
-    switch (programStruct.control.target)
+    switch (program.control.target)
     {
     case target_reset:
-        programStruct.control.step = step_reset; // ------->
+        program.control.step = step_reset;
         break;
-    
     default:
         break;
     }
-//---------------- переключатель конец
-
 }
 __STATIC_INLINE void __stepReset()
 {
-    //HAL_UART_Transmit(&huart,buf,5,100);
     bsp_sys_reset();
-
 }
 __STATIC_INLINE void __stepError()
 {
@@ -323,42 +515,37 @@ __STATIC_INLINE void __stepError()
 
     Program_fastStop();
 
-    if(((timerFaultBlink++)%PRG_LED_FAULT_BLINK_PERIOD)==0){
+    if (((timerFaultBlink++) % PRG_LED_FAULT_BLINK_PERIOD) == 0)
+    {
         BSP_LED_TOGGLE(BSP_LED_FAULT);
     }
 
-    //---------------- переключатель
-    switch (programStruct.control.target)
+    switch (program.control.target)
     {
     case target_debug:
-        programStruct.control.step = step_debug; // ------->
+        program.control.step = step_debug; 
         break;
-
     default:
         break;
     }
-    //---------------- переключатель конец
 }
 __STATIC_INLINE void __stepWaitOp()
 {
     static uint16_t cnt = 0;
 
-
-    if(((cnt++)%1000)==0){
+    if(((cnt++) % 1000) == 0)
+    {
         BSP_LED_TOGGLE(BSP_LED_RDY);
     }
 
-//---------------- переключатель
-    switch (programStruct.control.target)
+    switch (program.control.target)
     {
     case target_debug:
-        programStruct.control.step = step_debug; // ------->
+        program.control.step = step_debug;
         break;
     default:
         break;
     }
-//---------------- переключатель конец
-
 }
 /*--------------------------- STEPS END -------------------------------*/
 
@@ -382,11 +569,10 @@ void Program_start()
     Program_pwmInit();
     Program_analogInit();
 
-    bsp_sys_tick1k_start();
-    bsp_fft_init();
-    bsp_cordic_init();
     Program_sinBuf_init();
     Program_phase_init();
+
+    bsp_sys_tick1k_start();
     
     asm("NOP");
     Program_switchTarget(target_waitOp);
@@ -395,15 +581,15 @@ void Program_start()
 extern float sinBuf[3][320];
 void Program_sinBuf_init()
 {
-    programStruct.sin.f_pwm  = programStruct.setup.PWM_freq;
-    programStruct.sin.f_out = programStruct.setup.f_out;
-    programStruct.sin.bufLen = bsp_writeSinBuf(programStruct.sin.f_pwm, programStruct.sin.f_out);
-    programStruct.sin.currentIdx = 0;
+    program.sin.f_pwm  = program.setup.PWM_freq;
+    program.sin.f_out = program.setup.f_out;
+    program.sin.bufLen = bsp_writeSinBuf(program.sin.f_pwm, program.sin.f_out);
+    program.sin.currentIdx = 0;
     for (uint8_t i = 0; i < 3; i++)
     {
-        for (uint16_t j = 0; j < programStruct.sin.bufLen; j++)
+        for (uint16_t j = 0; j < program.sin.bufLen; j++)
         {
-            programStruct.sin.sinBuf[i][j] = sinBuf[i][j];
+            program.sin.sinBuf[i][j] = sinBuf[i][j];
         }
     }
     return;
@@ -411,26 +597,26 @@ void Program_sinBuf_init()
 
 void Program_phase_init()
 {
-    programStruct.phase[PROGRAM_FHASE_U].invNo1 = PROGRAM_INV_L;
-    programStruct.phase[PROGRAM_FHASE_U].channelNo1 = PROGRAM_OUT_U_INV_L;
-    programStruct.phase[PROGRAM_FHASE_U].invNo2 = PROGRAM_INV_R;
-    programStruct.phase[PROGRAM_FHASE_U].channelNo2 = PROGRAM_OUT_U_INV_R;
-    programStruct.phase[PROGRAM_FHASE_U].k_modOut = 0.0f;
-    programStruct.phase[PROGRAM_FHASE_U].voltageFb = &programStruct.analog.aIn[prg_analog_U_u].value;
+    program.phase[PROGRAM_FHASE_U].invNo1 = PROGRAM_INV_L;
+    program.phase[PROGRAM_FHASE_U].channelNo1 = PROGRAM_OUT_U_INV_L;
+    program.phase[PROGRAM_FHASE_U].invNo2 = PROGRAM_INV_R;
+    program.phase[PROGRAM_FHASE_U].channelNo2 = PROGRAM_OUT_U_INV_R;
+    program.phase[PROGRAM_FHASE_U].k_modOut = 0.0f;
+    program.phase[PROGRAM_FHASE_U].voltageFb = &program.analog.aIn[prg_analog_U_u].value;
 
-    programStruct.phase[PROGRAM_FHASE_V].invNo1 = PROGRAM_INV_L;
-    programStruct.phase[PROGRAM_FHASE_V].channelNo1 = PROGRAM_OUT_V_INV_L;
-    programStruct.phase[PROGRAM_FHASE_V].invNo2 = PROGRAM_INV_R;
-    programStruct.phase[PROGRAM_FHASE_V].channelNo2 = PROGRAM_OUT_V_INV_R;
-    programStruct.phase[PROGRAM_FHASE_V].k_modOut = 0.0f;
-    programStruct.phase[PROGRAM_FHASE_V].voltageFb = &programStruct.analog.aIn[prg_analog_U_v].value;
+    program.phase[PROGRAM_FHASE_V].invNo1 = PROGRAM_INV_L;
+    program.phase[PROGRAM_FHASE_V].channelNo1 = PROGRAM_OUT_V_INV_L;
+    program.phase[PROGRAM_FHASE_V].invNo2 = PROGRAM_INV_R;
+    program.phase[PROGRAM_FHASE_V].channelNo2 = PROGRAM_OUT_V_INV_R;
+    program.phase[PROGRAM_FHASE_V].k_modOut = 0.0f;
+    program.phase[PROGRAM_FHASE_V].voltageFb = &program.analog.aIn[prg_analog_U_v].value;
 
-    programStruct.phase[PROGRAM_FHASE_W].invNo1 = PROGRAM_INV_L;
-    programStruct.phase[PROGRAM_FHASE_W].channelNo1 = PROGRAM_OUT_W_INV_L;
-    programStruct.phase[PROGRAM_FHASE_W].invNo2 = PROGRAM_INV_R;
-    programStruct.phase[PROGRAM_FHASE_W].channelNo2 = PROGRAM_OUT_W_INV_R;
-    programStruct.phase[PROGRAM_FHASE_W].k_modOut = 0.0f;
-    programStruct.phase[PROGRAM_FHASE_W].voltageFb = &programStruct.analog.aIn[prg_analog_U_w].value;
+    program.phase[PROGRAM_FHASE_W].invNo1 = PROGRAM_INV_L;
+    program.phase[PROGRAM_FHASE_W].channelNo1 = PROGRAM_OUT_W_INV_L;
+    program.phase[PROGRAM_FHASE_W].invNo2 = PROGRAM_INV_R;
+    program.phase[PROGRAM_FHASE_W].channelNo2 = PROGRAM_OUT_W_INV_R;
+    program.phase[PROGRAM_FHASE_W].k_modOut = 0.0f;
+    program.phase[PROGRAM_FHASE_W].voltageFb = &program.analog.aIn[prg_analog_U_w].value;
 
     return;
 }
@@ -444,10 +630,19 @@ __STATIC_INLINE void Program_resetDout(Program_dout_typedef dout){
 __STATIC_INLINE uint8_t Program_checkDin(Program_din_typedef din){
     return bsp_dInOut_readDin(bsp_dInOut_in1 + din);
 }
-__STATIC_INLINE void Program_fastStop(){
+__STATIC_INLINE void Program_fastStop()
+{
     /* снять все импульсы, выключить все контакторы*/
-    Program_pwmOutsControl(bsp_pwm_outs_group_123, 0);
-    Program_pwmOutsControl(bsp_pwm_outs_group_456, 0);
+    Program_pwmOutsControl(bsp_pwm_outs_group_123, PROGRAM_PWM_OFF);
+    Program_pwmOutsControl(bsp_pwm_outs_group_456, PROGRAM_PWM_OFF);
+
+    for (uint8_t phase = 0; phase < program.setup.phaseCount; phase++)
+    {
+        program.phase[phase].k_modOut = 0.0f;
+        dsp_regulatorReset(&program.control.sau.voltageRegulator[phase]);
+    }
+    dsp_intensSetterReset(&program.control.sau.ZI);
+
     bsp_dInOut_setDouts1_10(0);
 }
 
@@ -469,36 +664,42 @@ void Program_ParamSetToDefault()
 {
     for (uint8_t i = 0; i < PRG_ANALOG_COUNT; i++)
     {
-        programStruct.setup.analog_av_order[i] = 12;  // 1 - фильтр отключен
-        programStruct.setup.analog_filter_N[i] = 1;   // 1 - Фильтр отключен
+        program.setup.analog_av_order[i] = 12;  // 1 - фильтр отключен
+        program.setup.analog_filter_N[i] = 1;   // 1 - Фильтр отключен
 
-        programStruct.setup.analog_kMul[i] = 1.0f;
-        programStruct.setup.analog_shift[i] = 0;
+        program.setup.analog_kMul[i] = 1.0f;
+        program.setup.analog_shift[i] = 0;
     }
 
-    programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_3;
-    programStruct.setup.f_out = PROGRAM_F_OUT_400HZ;
-    programStruct.setup.U_out = 120;
-    programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ; 
+    program.setup.phaseCount = PROGRAM_FHASE_COUNT_3;
+    program.setup.f_out = PROGRAM_F_OUT_400HZ;
+    program.setup.U_out = 120;
+    program.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ; 
 
     // Regul -----------------------------------------------------------
     for (uint8_t phase = 0; phase < PROGRAM_FHASE_COUNT; phase++)
     {
-        programStruct.setup.RegU_kp[phase]  = 0.001f;
-        programStruct.setup.RegU_ki[phase]  = 0.001f;
-        programStruct.setup.RegU_max[phase] = 1.0f;
+        program.setup.RegU_kp[phase]  = 0.001f;
+        program.setup.RegU_ki[phase]  = 0.001f;
+        program.setup.RegU_max[phase] = 1.0f;
     }
 
     // @do
     // уставки для формирования аварий
+    program.setup.Udc_low        = 800;     // V
+    program.setup.Udc_high       = 1030;    // V
+    program.setup.Uac_no_ok      = 10;      // %
+    program.setup.Iac_nominal    = 40;      // A
+    program.setup.Tradiator_high = 85;      // C
+
     return;
 }
 
 #define PROGRAM_PARAM_SIZE_BYTE sizeof(Program_PARAM_typedef)
 uint8_t Program_ParamLoad()
 {
-   programStruct.sys.flash_counter = FlashWorker_getAvailableRecords(PROGRAM_PARAM_SIZE_BYTE);
-   return FlashWorker_load((void*)(&programStruct.setup),PROGRAM_PARAM_SIZE_BYTE);
+   program.sys.flash_counter = FlashWorker_getAvailableRecords(PROGRAM_PARAM_SIZE_BYTE);
+   return FlashWorker_load((void*)(&program.setup),PROGRAM_PARAM_SIZE_BYTE);
 }
 
 #define SAVE_COUNT_MAX_PER_SESSION (10)
@@ -510,10 +711,10 @@ uint8_t Program_ParamSave()
         return 0;
     }
 
-    if (programStruct.control.step == step_debug)
+    if (program.control.step == step_debug)
     {
-        FlashWorker_save((void *)(&programStruct.setup), PROGRAM_PARAM_SIZE_BYTE);
-        programStruct.sys.flash_counter = FlashWorker_getAvailableRecords(PROGRAM_PARAM_SIZE_BYTE);
+        FlashWorker_save((void *)(&program.setup), PROGRAM_PARAM_SIZE_BYTE);
+        program.sys.flash_counter = FlashWorker_getAvailableRecords(PROGRAM_PARAM_SIZE_BYTE);
         return 1;
     }
     return 0;
@@ -521,21 +722,21 @@ uint8_t Program_ParamSave()
 
 __INLINE uint8_t Program_GoDebug()
 {
-    if ((programStruct.control.step != step_waitOp) && (programStruct.control.step != step_error))
+    if ((program.control.step != step_waitOp) && (program.control.step != step_error))
     {
         return 0;
     }
     /*
         Перед отладкой обнулить REMOTE структуру!
     */
-    programStruct.control.remote.dout.w16 = 0;
+    program.control.remote.dout.w16 = 0;
     for (uint8_t i = 0; i < 6; i++)
     {
-        //programStruct.control.remote.pwmArray[i] = 0;
+        //program.control.remote.pwmArray[i] = 0;
     }
 
-    programStruct.control.remote.pwmEnable123 = 0;
-    programStruct.control.remote.pwmEnable456 = 0;
+    program.control.remote.pwmEnable123 = 0;
+    program.control.remote.pwmEnable456 = 0;
 
    /*
         Перед отладкой обнулить REMOTE структуру!
@@ -546,9 +747,9 @@ __INLINE uint8_t Program_GoDebug()
 
 __INLINE uint8_t Program_set_dout_debug(uint16_t douts)
 {
-    if(programStruct.control.step == step_debug){
+    if(program.control.step == step_debug){
 
-        programStruct.control.remote.dout.w16 = douts;
+        program.control.remote.dout.w16 = douts;
         return 1;
     }
     return 0;
@@ -563,7 +764,7 @@ __INLINE uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc
     {
         return 0;
     }
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0; 
     }
@@ -579,7 +780,7 @@ __INLINE uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc
 
     for (uint8_t i = 0; i < COUNT_CHANNEL_PWM; i++)
     {
-        programStruct.control.remote.kPWM[channel_IDx] = pwm1000Perc;
+        program.control.remote.kPWM[channel_IDx] = pwm1000Perc;
     }
     return 1;
 }
@@ -588,7 +789,7 @@ __INLINE uint8_t Program_set_pwm_debug(uint8_t channel_IDx, uint16_t pwm1000Perc
 #define PROGRAM_KMOD_MDB_MIN (0)
 __INLINE uint8_t Program_set_k_mod_debug (uint16_t kMod_mdb)
 {
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
@@ -602,27 +803,27 @@ __INLINE uint8_t Program_set_k_mod_debug (uint16_t kMod_mdb)
         kMod_mdb = 0;
     }
     
-    for (int phase = 0; phase < programStruct.setup.phaseCount; phase++)
+    for (int phase = 0; phase < program.setup.phaseCount; phase++)
     {
-        programStruct.control.remote.k_modIn = ((float)kMod_mdb)/1000.0f;
+        program.control.remote.k_modIn = ((float)kMod_mdb)/1000.0f;
     }
     return 1;
 }
 
 __INLINE uint8_t Program_сhoice_kPWM_or_kMod_debug(uint16_t choise)
 {
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
 
     if (choise == REMOTE_KMOD)
     {
-        programStruct.control.remote.choise_kPWM_or_kMod = REMOTE_KMOD;
+        program.control.remote.choise_kPWM_or_kMod = REMOTE_KMOD;
     }
     else if (choise == REMOTE_KPWM)
     {
-        programStruct.control.remote.choise_kPWM_or_kMod = REMOTE_KPWM;
+        program.control.remote.choise_kPWM_or_kMod = REMOTE_KPWM;
     }
 
     return 1;
@@ -630,22 +831,22 @@ __INLINE uint8_t Program_сhoice_kPWM_or_kMod_debug(uint16_t choise)
 
 __INLINE uint8_t Program_set_phaseCount_debug(uint16_t phaseCount)
 {
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
 
     if (phaseCount == PROGRAM_FHASE_COUNT_1)
     {
-        programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_1;
+        program.setup.phaseCount = PROGRAM_FHASE_COUNT_1;
     }
     else if (phaseCount == PROGRAM_FHASE_COUNT_3)
     {
-        programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_3;
+        program.setup.phaseCount = PROGRAM_FHASE_COUNT_3;
     }
     else 
     {
-        programStruct.setup.phaseCount = PROGRAM_FHASE_COUNT_1;
+        program.setup.phaseCount = PROGRAM_FHASE_COUNT_1;
         return 0;
     }
     return 1;
@@ -653,22 +854,22 @@ __INLINE uint8_t Program_set_phaseCount_debug(uint16_t phaseCount)
 
 __INLINE uint8_t Program_set_fOut_debug(uint16_t fOut)
 {
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
 
     if (fOut == PROGRAM_F_OUT_50HZ)
     {
-        programStruct.setup.f_out = PROGRAM_F_OUT_50HZ;
+        program.setup.f_out = PROGRAM_F_OUT_50HZ;
     }
     else if (fOut == PROGRAM_F_OUT_400HZ)
     {
-        programStruct.setup.f_out = PROGRAM_F_OUT_400HZ;
+        program.setup.f_out = PROGRAM_F_OUT_400HZ;
     }
     else 
     {
-        programStruct.setup.f_out = PROGRAM_F_OUT_50HZ;
+        program.setup.f_out = PROGRAM_F_OUT_50HZ;
         return 0;
     }
     return 1; 
@@ -678,7 +879,7 @@ __INLINE uint8_t Program_set_fOut_debug(uint16_t fOut)
 #define PROGRAM_U_OUT_MAX (230)
 __INLINE uint8_t Program_set_uOut_debug(uint16_t uOut)
 {
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
@@ -691,13 +892,13 @@ __INLINE uint8_t Program_set_uOut_debug(uint16_t uOut)
     {
         uOut = PROGRAM_U_OUT_MAX;
     }
-    programStruct.setup.U_out = uOut;
+    program.setup.U_out = uOut;
     return 1;
 }
 
 __INLINE uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq)
 {
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
@@ -705,25 +906,25 @@ __INLINE uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq)
     switch (PWM_freq)
     {
     case PROGRAM_PWM_FREQ_4000HZ:
-        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ;
+        program.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ;
         break;
     case PROGRAM_PWM_FREQ_4800HZ:
-        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4800HZ;
+        program.setup.PWM_freq = PROGRAM_PWM_FREQ_4800HZ;
         break; 
     case PROGRAM_PWM_FREQ_5600HZ:
-        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_5600HZ;
+        program.setup.PWM_freq = PROGRAM_PWM_FREQ_5600HZ;
         break;
     case PROGRAM_PWM_FREQ_6000HZ:
-        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_6000HZ;
+        program.setup.PWM_freq = PROGRAM_PWM_FREQ_6000HZ;
         break;
     case PROGRAM_PWM_FREQ_6400HZ:
-        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_6400HZ;
+        program.setup.PWM_freq = PROGRAM_PWM_FREQ_6400HZ;
         break;
     case PROGRAM_PWM_FREQ_8000HZ:
-        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_8000HZ;
+        program.setup.PWM_freq = PROGRAM_PWM_FREQ_8000HZ;
         break; 
     default:
-        programStruct.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ;
+        program.setup.PWM_freq = PROGRAM_PWM_FREQ_4000HZ;
         return 0;
         break;
     }
@@ -735,7 +936,7 @@ __INLINE uint8_t Program_set_PWM_freq_debug(uint16_t PWM_freq)
 #define PROGRAM_REGUL_KP_MAX (0.05f)
 __INLINE uint8_t Program_set_regul_kp (uint8_t phase_idx, float kp)
 {
-    if ((programStruct.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
+    if ((program.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
     {
         return 0;
     }
@@ -748,7 +949,7 @@ __INLINE uint8_t Program_set_regul_kp (uint8_t phase_idx, float kp)
     {
         kp = PROGRAM_REGUL_KP_MAX;
     }
-    programStruct.setup.RegU_kp[phase_idx] = kp;
+    program.setup.RegU_kp[phase_idx] = kp;
     return 1;
 }
 
@@ -756,7 +957,7 @@ __INLINE uint8_t Program_set_regul_kp (uint8_t phase_idx, float kp)
 #define PROGRAM_REGUL_KI_MAX (0.05f)
 __INLINE uint8_t Program_set_regul_ki (uint8_t phase_idx, float ki)
 {
-    if ((programStruct.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
+    if ((program.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
     {
         return 0;
     }
@@ -769,7 +970,7 @@ __INLINE uint8_t Program_set_regul_ki (uint8_t phase_idx, float ki)
     {
         ki = PROGRAM_REGUL_KI_MAX;
     }
-    programStruct.setup.RegU_ki[phase_idx] = ki;
+    program.setup.RegU_ki[phase_idx] = ki;
     return 1;
 }
 
@@ -777,7 +978,7 @@ __INLINE uint8_t Program_set_regul_ki (uint8_t phase_idx, float ki)
 #define PROGRAM_REGUL_U_OUT_MAX (1.0f)
 uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max)
 {
-    if ((programStruct.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
+    if ((program.control.step != step_debug) || (phase_idx >= PROGRAM_FHASE_COUNT))
     {
         return 0;
     }
@@ -790,14 +991,14 @@ uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max)
     {
         uOut_max = PROGRAM_REGUL_U_OUT_MAX;
     }
-    programStruct.setup.RegU_max[phase_idx] = uOut_max;
+    program.setup.RegU_max[phase_idx] = uOut_max;
     return 1;
 
 }
 
 __INLINE uint8_t Program_GoReset()
 {
-    if(programStruct.control.step == step_debug){
+    if(program.control.step == step_debug){
 
         Program_switchTarget(target_reset);
         return 1;
@@ -807,7 +1008,7 @@ __INLINE uint8_t Program_GoReset()
 
 __INLINE uint8_t Program_LoadDefaultParam_debug()
 {
-    if (programStruct.control.step == step_debug)
+    if (program.control.step == step_debug)
     {
         Program_ParamSetToDefault();
         return 1;
@@ -818,21 +1019,22 @@ __INLINE uint8_t Program_LoadDefaultParam_debug()
 __STATIC_INLINE uint8_t Program_setError(Program_ERROR_typedef error)
 {
     if (error == error_noError)
-        return 0;
-
-    if (programStruct.setup.protect_control & (uint64_t)(1 << (error - 1)))
     {
         return 0;
     }
-    programStruct.control.errorCode = error;
+        
+    if (program.setup.protect_control & (uint16_t)(1 << (error - 1)))
+    {
+        return 0;
+    }
+    program.control.errorCode = error;
     Program_switchTarget(target_error);
     return 1;
 }
 
 __INLINE void Program_switchTarget(Program_TARGET_typedef newTarget)
 {
-
-    programStruct.control.target = newTarget;
+    program.control.target = newTarget;
 }
 //------------  ФУНКЦИИ КОНЕЦ ------------//
 
@@ -841,17 +1043,21 @@ __INLINE void Program_switchTarget(Program_TARGET_typedef newTarget)
 #define PROGRAM_WAIT_START (1000)
 void bsp_sys_tick_1k_callback()
 {
-    static uint8_t count_mdb_update = 0;
+    static uint8_t  count_mdb_update   = 0;
     static uint16_t count_button_start = 0;
 
     // Пуск ПЧ от кнопки Start, только из target_waitOp и step_wait_op 
     if ((Program_checkDin(prg_din1_Pusk) == PRG_DIN_PUSK_VAL) &&
-        (programStruct.control.target == target_waitOp) && 
-        (programStruct.control.step == step_waitOp))
+        (program.control.target == target_waitOp) && 
+        (program.control.step == step_waitOp))
     {
         if (count_button_start++ > PROGRAM_WAIT_START)
         {
             Program_switchTarget(target_Work);
+        }
+        else
+        {
+            asm("Nop");
         }
     }
     else
@@ -868,7 +1074,7 @@ void bsp_sys_tick_1k_callback()
     }
 
     asm("NOP");
-    switch (programStruct.control.step)
+    switch (program.control.step)
     {
     case step_waitInit:
         __stepWaitInit();
@@ -888,7 +1094,6 @@ void bsp_sys_tick_1k_callback()
     case step_error:
         __stepError();
         break;
-
     case step_Check_Udc:
         __stepCheckUdc();
         break;
@@ -901,7 +1106,6 @@ void bsp_sys_tick_1k_callback()
     case step_Stop:
         __stepStop();
         break;
-
     default:
         break;
     }
@@ -937,7 +1141,7 @@ __STATIC_INLINE void Program_pwmInit()
     bsp_pwm_set_tim(bsp_pwm_tim_mode_up_down, 300, BSP_PWM_POSITIVE_POLARITY);
 
 
-    switch (programStruct.setup.PWM_freq)
+    switch (program.setup.PWM_freq)
     {
     case PROGRAM_PWM_FREQ_4000HZ:
         bsp_pwm_set_freq(bsp_pwm_outs_group_123, bsp_pwm_freq_4000_hz, 1);
@@ -978,62 +1182,62 @@ __STATIC_INLINE void Program_pwmInit()
 #define PROGRAM_PERIOD_1K_CALBACK (0.001f)
 __STATIC_INLINE void Program_regulatorInit()
 {
-    for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
+    for (uint8_t phase = 0; phase < program.setup.phaseCount; phase++)
     {
-        programStruct.control.sau.voltageRegulator[phase].k_P   = programStruct.setup.RegU_kp[phase];
-        programStruct.control.sau.voltageRegulator[phase].k_Int = programStruct.setup.RegU_ki[phase];
+        program.control.sau.voltageRegulator[phase].k_P   = program.setup.RegU_kp[phase];
+        program.control.sau.voltageRegulator[phase].k_Int = program.setup.RegU_ki[phase];
 
-        switch (programStruct.setup.PWM_freq)
+        switch (program.setup.PWM_freq)
         {
         case PROGRAM_PWM_FREQ_4000HZ:
-            programStruct.control.sau.voltageRegulator[phase].period = 0.00025f;
+            program.control.sau.voltageRegulator[phase].period = 0.00025f;
             break;
         case PROGRAM_PWM_FREQ_4800HZ:
-            programStruct.control.sau.voltageRegulator[phase].period = 0.0002083f;
+            program.control.sau.voltageRegulator[phase].period = 0.0002083f;
             break;
         case PROGRAM_PWM_FREQ_5600HZ:
-            programStruct.control.sau.voltageRegulator[phase].period = 0.0001786f;
+            program.control.sau.voltageRegulator[phase].period = 0.0001786f;
             break;
         case PROGRAM_PWM_FREQ_6000HZ:
-            programStruct.control.sau.voltageRegulator[phase].period = 0.0001667f;
+            program.control.sau.voltageRegulator[phase].period = 0.0001667f;
             break;
         case PROGRAM_PWM_FREQ_6400HZ:
-            programStruct.control.sau.voltageRegulator[phase].period = 0.00015625;
+            program.control.sau.voltageRegulator[phase].period = 0.00015625;
             break;
         case PROGRAM_PWM_FREQ_8000HZ:
-            programStruct.control.sau.voltageRegulator[phase].period = 0.000125f;
+            program.control.sau.voltageRegulator[phase].period = 0.000125f;
             break;
         default:
-            programStruct.control.sau.voltageRegulator[phase].period = 0.00025f;
+            program.control.sau.voltageRegulator[phase].period = 0.00025f;
             break;
         }
 
-        programStruct.control.sau.voltageRegulator[phase].IntMin = 0.0f;
-        programStruct.control.sau.voltageRegulator[phase].IntMax = programStruct.setup.RegU_max[phase];
-        programStruct.control.sau.voltageRegulator[phase].OutMin = 0.0f;
-        programStruct.control.sau.voltageRegulator[phase].OutMax = programStruct.setup.RegU_max[phase];
+        program.control.sau.voltageRegulator[phase].IntMin = 0.0f;
+        program.control.sau.voltageRegulator[phase].IntMax = program.setup.RegU_max[phase];
+        program.control.sau.voltageRegulator[phase].OutMin = 0.0f;
+        program.control.sau.voltageRegulator[phase].OutMax = program.setup.RegU_max[phase];
 
-        programStruct.control.sau.voltageRegulator[phase].In = programStruct.setup.U_out;
+        program.control.sau.voltageRegulator[phase].In = program.setup.U_out;
         
     }
 
-    dsp_intensSetterSetup(&programStruct.control.sau.ZI, programStruct.setup.U_out, PROGRAM_PERIOD_1K_CALBACK);
+    dsp_intensSetterSetup(&program.control.sau.ZI, program.setup.U_out, PROGRAM_PERIOD_1K_CALBACK);
 }
 
 uint8_t Program_set_pwmOuts_debug(bsp_pwm_outs_group_typedef group, uint8_t onOff)
 {
-    if ( programStruct.control.step != step_debug )
+    if ( program.control.step != step_debug )
     {
         return 0;
     }
 
     if (group == bsp_pwm_outs_group_123)
     {
-        programStruct.control.remote.pwmEnable123 = onOff;
+        program.control.remote.pwmEnable123 = onOff;
     }
     else if (group == bsp_pwm_outs_group_456)
     {
-        programStruct.control.remote.pwmEnable456 = onOff;
+        program.control.remote.pwmEnable456 = onOff;
     }
     else
     {
@@ -1048,28 +1252,28 @@ void bsp_pwm_123_callback()
     float currentVal = 0.0f;
     float kMod = 0.0f;
 
-    if (programStruct.control.step == step_debug)
+    if (program.control.step == step_debug)
     {
-        if (programStruct.control.remote.choise_kPWM_or_kMod == REMOTE_KMOD)
+        if (program.control.remote.choise_kPWM_or_kMod == REMOTE_KMOD)
         {
-            for (int phase = 0; phase < programStruct.setup.phaseCount; phase++)
+            for (int phase = 0; phase < program.setup.phaseCount; phase++)
             {
-                kMod = saturate(programStruct.control.remote.k_modIn, 0.0f, 1.0f);
+                kMod = saturate(program.control.remote.k_modIn, 0.0f, 1.0f);
                 // float tmp = rateLimitter(kMod, 1.0f, 0);
-                currentVal = *(&programStruct.sin.sinBuf[phase][0] + programStruct.sin.currentIdx);
+                currentVal = *(&program.sin.sinBuf[phase][0] + program.sin.currentIdx);
                 currentVal *= kMod;
-                setPhasePWM(&programStruct.phase[phase], currentVal);
+                setPhasePWM(&program.phase[phase], currentVal);
             }
-            if (++programStruct.sin.currentIdx == programStruct.sin.bufLen)
+            if (++program.sin.currentIdx == program.sin.bufLen)
             {
-                programStruct.sin.currentIdx = 0;
+                program.sin.currentIdx = 0;
             }
         }
-        else if (programStruct.control.remote.choise_kPWM_or_kMod == REMOTE_KPWM)
+        else if (program.control.remote.choise_kPWM_or_kMod == REMOTE_KPWM)
         {
             for (uint8_t i = 0; i < COUNT_CHANNEL_PWM; i++)
             {
-                SET_PWM(i, programStruct.control.remote.kPWM[i]);
+                SET_PWM(i, program.control.remote.kPWM[i]);
             }
         }
         else
@@ -1080,17 +1284,17 @@ void bsp_pwm_123_callback()
         return;
     }
 
-    for (uint8_t phase = 0; phase < programStruct.setup.phaseCount; phase++)
+    for (uint8_t phase = 0; phase < program.setup.phaseCount; phase++)
     {
-        kMod = saturate(programStruct.phase[phase].k_modOut, 0.0f, PROGRAM_SETUP_KMOD_MAX);
-        currentVal = *(&programStruct.sin.sinBuf[phase][0] + programStruct.sin.currentIdx);
+        kMod = saturate(program.phase[phase].k_modOut, 0.0f, PROGRAM_SETUP_KMOD_MAX);
+        currentVal = *(&program.sin.sinBuf[phase][0] + program.sin.currentIdx);
         currentVal *= kMod;
-        setPhasePWM(&programStruct.phase[phase], currentVal);
+        setPhasePWM(&program.phase[phase], currentVal);
     }
-    if (++programStruct.sin.currentIdx == programStruct.sin.bufLen)
+    if (++program.sin.currentIdx == program.sin.bufLen)
     {
         asm("Nop");
-        programStruct.sin.currentIdx = 0;
+        program.sin.currentIdx = 0;
     }
 
     return;
@@ -1104,12 +1308,13 @@ Program_AIN_typedef* Program_analogGetByIdx(Program_ANALOG_ENUM_typedef idx){
         return NULL;
     }
 
-    return &programStruct.analog.aIn[idx];
+    return &program.analog.aIn[idx];
 }
 
 uint8_t Program_analogSetZero(Program_ANALOG_ENUM_typedef idx){
     
-    if(programStruct.control.step != step_debug){
+    if(program.control.step != step_debug)
+    {
         return 0;
     }
     
@@ -1118,14 +1323,15 @@ uint8_t Program_analogSetZero(Program_ANALOG_ENUM_typedef idx){
         return 0;
     }
 
-    programStruct.analog.aIn[idx].shift = programStruct.analog.aIn[idx].valueRaw;
-    programStruct.setup.analog_shift[idx] = programStruct.analog.aIn[idx].shift;
+    program.analog.aIn[idx].shift = program.analog.aIn[idx].valueRaw;
+    program.setup.analog_shift[idx] = program.analog.aIn[idx].shift;
     return 1;
 }
 
 uint8_t Program_analogCalibKMul(Program_ANALOG_ENUM_typedef idx, float value){
 
-    if(programStruct.control.step != step_debug){
+    if(program.control.step != step_debug)
+    {
         return 0;
     }
 
@@ -1134,18 +1340,18 @@ uint8_t Program_analogCalibKMul(Program_ANALOG_ENUM_typedef idx, float value){
         return 0;
     }
 
-    float kMul = programStruct.analog.aIn[idx].kMul;
+    float kMul = program.analog.aIn[idx].kMul;
     if(kMul == 0.0f) return 0;
-    float currentVal = programStruct.analog.aIn[idx].value / kMul;
+    float currentVal = program.analog.aIn[idx].value / kMul;
 
-    programStruct.analog.aIn[idx].kMul = value / currentVal;
-    programStruct.setup.analog_kMul[idx] = programStruct.analog.aIn[idx].kMul;
+    program.analog.aIn[idx].kMul = value / currentVal;
+    program.setup.analog_kMul[idx] = program.analog.aIn[idx].kMul;
     return 1;
 }
 
 uint8_t Program_analogSetShift(Program_ANALOG_ENUM_typedef idx, float value){
 
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
@@ -1155,13 +1361,13 @@ uint8_t Program_analogSetShift(Program_ANALOG_ENUM_typedef idx, float value){
         return 0;
     }
 
-    programStruct.setup.analog_shift[idx] = value;
+    program.setup.analog_shift[idx] = value;
     return 1;
 }
 
 uint8_t Program_analogSetKMul(Program_ANALOG_ENUM_typedef idx, float value){
 
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
@@ -1171,13 +1377,13 @@ uint8_t Program_analogSetKMul(Program_ANALOG_ENUM_typedef idx, float value){
         return 0;
     }
 
-    programStruct.setup.analog_kMul[idx] = value;
+    program.setup.analog_kMul[idx] = value;
     return 1;
 }
 
 uint8_t Program_analogSetAvOrder(Program_ANALOG_ENUM_typedef idx, uint8_t order){
 
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
@@ -1189,13 +1395,13 @@ uint8_t Program_analogSetAvOrder(Program_ANALOG_ENUM_typedef idx, uint8_t order)
 
     if(order < 1 ) order = 1;
     else if (order > PROGRAM_ADC_MAX_FILTER_ORDER) order = PROGRAM_ADC_MAX_FILTER_ORDER;
-    programStruct.setup.analog_av_order[idx] = order;
+    program.setup.analog_av_order[idx] = order;
     return 1;
 }
 
 uint8_t Program_analogSetFilterN(Program_ANALOG_ENUM_typedef idx, uint16_t filterN){
 
-    if (programStruct.control.step != step_debug)
+    if (program.control.step != step_debug)
     {
         return 0;
     }
@@ -1214,7 +1420,7 @@ uint8_t Program_analogSetFilterN(Program_ANALOG_ENUM_typedef idx, uint16_t filte
         filterN = PROGRAM_ADC_MAX_FILTER_N;
     }
 
-    programStruct.setup.analog_filter_N[idx] = filterN;
+    program.setup.analog_filter_N[idx] = filterN;
     return 1;
 }
 
@@ -1222,24 +1428,24 @@ __STATIC_INLINE uint8_t Program_analogInit()
 {
     for (uint8_t i = 0; i < PRG_ANALOG_COUNT; i++)
     {
-        programStruct.analog.aIn[i].bspIdx        = -1;
-        programStruct.analog.aIn[i].order         = programStruct.setup.analog_av_order[i];
-        programStruct.analog.aIn[i].analogFilterN = programStruct.setup.analog_filter_N[i];
-        programStruct.analog.aIn[i].kMul          = programStruct.setup.analog_kMul[i];
-        programStruct.analog.aIn[i].shift         = programStruct.setup.analog_shift[i];
+        program.analog.aIn[i].bspIdx        = -1;
+        program.analog.aIn[i].order         = program.setup.analog_av_order[i];
+        program.analog.aIn[i].analogFilterN = program.setup.analog_filter_N[i];
+        program.analog.aIn[i].kMul          = program.setup.analog_kMul[i];
+        program.analog.aIn[i].shift         = program.setup.analog_shift[i];
     }
 
-    programStruct.analog.aIn[prg_analog_I_u].bspIdx = 0;
-    programStruct.analog.aIn[prg_analog_I_v].bspIdx = 1;
-    programStruct.analog.aIn[prg_analog_I_w].bspIdx = 2;
-    programStruct.analog.aIn[prg_analog_U_u].bspIdx = 3;
-    programStruct.analog.aIn[prg_analog_U_v].bspIdx = 4;
-    programStruct.analog.aIn[prg_analog_U_w].bspIdx = 5;
-    programStruct.analog.aIn[prg_analog_Uzpt_inv_L].bspIdx = 6;
-    programStruct.analog.aIn[prg_analog_Uzpt_inv_R].bspIdx = 7;
-    programStruct.analog.aIn[prg_analog_AI8].bspIdx = 8;
-    programStruct.analog.aIn[prg_analog_AI9].bspIdx = 9;
-    programStruct.analog.aIn[prg_analog_AI10].bspIdx = 10;
+    program.analog.aIn[prg_analog_I_u].bspIdx      = 0;
+    program.analog.aIn[prg_analog_I_v].bspIdx      = 1;
+    program.analog.aIn[prg_analog_I_w].bspIdx      = 2;
+    program.analog.aIn[prg_analog_U_u].bspIdx      = 3;
+    program.analog.aIn[prg_analog_U_v].bspIdx      = 4;
+    program.analog.aIn[prg_analog_U_w].bspIdx      = 5;
+    program.analog.aIn[prg_analog_Udc_invL].bspIdx = 6;
+    program.analog.aIn[prg_analog_Udc_invR].bspIdx = 7;
+    program.analog.aIn[prg_analog_AI8].bspIdx      = 8;
+    program.analog.aIn[prg_analog_AI9].bspIdx      = 9;
+    program.analog.aIn[prg_analog_AI10].bspIdx     = 10;
 
     bsp_analogIn_start();
 
@@ -1290,10 +1496,10 @@ void bsp_analogIn_ready_callback()
 
     for (uint8_t ch = 0; ch < count; ch++)
     {
-        if (programStruct.analog.aIn[ch].bspIdx == -1)
+        if (program.analog.aIn[ch].bspIdx == -1)
             continue;
 
-        uint8_t bspIdx = programStruct.analog.aIn[ch].bspIdx;
+        uint8_t bspIdx = program.analog.aIn[ch].bspIdx;
 
         if ((bspIdx >= 0) && (bspIdx <= 5))
         {
@@ -1308,33 +1514,33 @@ void bsp_analogIn_ready_callback()
             data = bsp_analogIn_struct.rawDataUI_FFT[bspIdx][FFT_50HZ];
         }
 
-        programStruct.analog.aIn[ch].buf[programStruct.analog.aIn[ch].bufIdx++] = data;
+        program.analog.aIn[ch].buf[program.analog.aIn[ch].bufIdx++] = data;
 
-        if (programStruct.analog.aIn[ch].bufIdx == programStruct.analog.aIn[ch].order)
+        if (program.analog.aIn[ch].bufIdx == program.analog.aIn[ch].order)
         {
-            programStruct.analog.aIn[ch].bufIdx = 0;
+            program.analog.aIn[ch].bufIdx = 0;
         }
 
         float sum = 0.0f;
-        for (uint8_t idx = 0; idx < programStruct.analog.aIn[ch].order; idx++)
+        for (uint8_t idx = 0; idx < program.analog.aIn[ch].order; idx++)
         {
-            sum += programStruct.analog.aIn[ch].buf[idx];
+            sum += program.analog.aIn[ch].buf[idx];
         }
-        programStruct.analog.aIn[ch].valueRaw = (sum / programStruct.analog.aIn[ch].order);
+        program.analog.aIn[ch].valueRaw = (sum / program.analog.aIn[ch].order);
 
-        value = (programStruct.analog.aIn[ch].valueRaw - programStruct.analog.aIn[ch].shift) *
-                programStruct.analog.aIn[ch].kMul;
+        value = (program.analog.aIn[ch].valueRaw - program.analog.aIn[ch].shift) *
+                program.analog.aIn[ch].kMul;
 
-        valueLast = programStruct.analog.aIn[ch].valueLast;
+        valueLast = program.analog.aIn[ch].valueLast;
         // Формула: Yavg(i) = Yavg(i-1) + a * ( X(i) - Yavg(i-1) );
         // a = 2/(N + 1) -> Коэффициент фильтра;
         // N -> количество точек для усреднения, N >= 1;
         // N = 1 -> фильтр отключен;
-        kFilter = 2.0f / ((float)programStruct.analog.aIn[ch].analogFilterN + 1.0f);
+        kFilter = 2.0f / ((float)program.analog.aIn[ch].analogFilterN + 1.0f);
         value = valueLast + kFilter * (value - valueLast);
 
-        programStruct.analog.aIn[ch].value = value;
-        programStruct.analog.aIn[ch].valueLast = value;
+        program.analog.aIn[ch].value = value;
+        program.analog.aIn[ch].valueLast = value;
     }
 }
 //------------   АЦП End  ------------//

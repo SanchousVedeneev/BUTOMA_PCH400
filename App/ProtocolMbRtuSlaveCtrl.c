@@ -158,7 +158,7 @@ protocolMbRtuSlaveCtrl_typedef modbusRtu_ctrlStruct; // protocol control struct
 //------------------------ EXTERN ------------------------
 extern bsp_dInOut_typedef bsp_dInOut_struct;
 extern bsp_analogIn_typedef bsp_analogIn_struct;
-extern Program_typedef programStruct;
+extern Program_typedef program;
 //---------------------- EXTERN END-----------------------
 
 //------------------------ REGULAR FCN ------------------------
@@ -184,16 +184,16 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   {
     ModbusSS_SetWord(&mdb_table_bsp, regNo++, bsp_analogIn_struct.rawDataUI[i]); // 1005 - 1016
   }
-  ModbusSS_SetWord(&mdb_table_bsp, regNo++, bsp_analogIn_getTemp(1));   // 1017
-  ModbusSS_SetWord(&mdb_table_bsp, regNo,   bsp_analogIn_getTemp(2));   // 1018
+  ModbusSS_SetWord(&mdb_table_bsp, regNo++, bsp_analogIn_struct.currentTemp[0]);   // 1017
+  ModbusSS_SetWord(&mdb_table_bsp, regNo,   bsp_analogIn_struct.currentTemp[1]);   // 1018
 
   // PROGRAM -----------------------------
   // ModbusSS_SetWord(&mdb_table_program, tab_prg_cmd,            modbusRtu_ctrlStruct.cmd);         // 1200
   // ModbusSS_SetWord(&mdb_table_program, tab_prg_param,          modbusRtu_ctrlStruct.param);       // 1201
-  ModbusSS_SetWord(&mdb_table_program, tab_prg_target,         programStruct.control.target);     // 1202
-  ModbusSS_SetWord(&mdb_table_program, tab_prg_step,           programStruct.control.step);       // 1203
-  ModbusSS_SetWord(&mdb_table_program, tab_prg_ecode,          programStruct.control.errorCode);  // 1204
-  ModbusSS_SetWord(&mdb_table_program, tab_prg_flashCounter,   programStruct.sys.flash_counter);  // 1205
+  ModbusSS_SetWord(&mdb_table_program, tab_prg_target,         program.control.target);     // 1202
+  ModbusSS_SetWord(&mdb_table_program, tab_prg_step,           program.control.step);       // 1203
+  ModbusSS_SetWord(&mdb_table_program, tab_prg_ecode,          program.control.errorCode);  // 1204
+  ModbusSS_SetWord(&mdb_table_program, tab_prg_flashCounter,   program.sys.flash_counter);  // 1205
   
   uint16_t StartIdx = tab_prg_prg_analog_AI0;
   uint16_t StopIdx = tab_prg_prg_analog_AI10;
@@ -204,15 +204,15 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
       ModbusSS_SetWord(&mdb_table_program, StartIdx + i, val); // 1206
   }
   
-  ModbusSS_SetWord(&mdb_table_program, tab_prg_k_modIn,             programStruct.control.remote.k_modIn*kMul_1000);    //1217
+  ModbusSS_SetWord(&mdb_table_program, tab_prg_k_modIn,             program.control.remote.k_modIn*kMul_1000);    //1217
 
-  ModbusSS_SetWord(&mdb_table_program, tab_prg_сhoice_kPWM_or_kMod, programStruct.control.remote.choise_kPWM_or_kMod);  //1218
+  ModbusSS_SetWord(&mdb_table_program, tab_prg_сhoice_kPWM_or_kMod, program.control.remote.choise_kPWM_or_kMod);  //1218
 
   StartIdx = tab_prg_kPWM_0;
   StopIdx  = tab_prg_kPWM_5;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_program, StartIdx + i,   programStruct.control.remote.kPWM[i]);  //1219
+    ModbusSS_SetWord(&mdb_table_program, StartIdx + i,   program.control.remote.kPWM[i]);  //1219
   }
 
   // SETUP -----------------------------
@@ -220,55 +220,55 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   StopIdx  = tab_setup_analog_shift_10;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, programStruct.setup.analog_shift[i]);
+    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, program.setup.analog_shift[i]);
   }
 
   StartIdx = tab_setup_analog_kMul_0;
   StopIdx  = tab_setup_analog_kMul_10;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, (int16_t)(programStruct.setup.analog_kMul[i]*kMul_1000));
+    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, (int16_t)(program.setup.analog_kMul[i]*kMul_1000));
   }
 
   StartIdx = tab_setup_analog_av_order_0;
   StopIdx  = tab_setup_analog_av_order_10;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, programStruct.setup.analog_av_order[i]);
+    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, program.setup.analog_av_order[i]);
   }
 
   StartIdx = tab_setup_analog_filter_N_0;
   StopIdx  = tab_setup_analog_filter_N_10;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, programStruct.setup.analog_filter_N[i]);
+    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i, program.setup.analog_filter_N[i]);
   }
 
-  ModbusSS_SetWord(&mdb_table_setup, tab_setup_protect,       programStruct.setup.protect_control);
-  ModbusSS_SetWord(&mdb_table_setup, tab_setup_phase_count,   programStruct.setup.phaseCount);
-  ModbusSS_SetWord(&mdb_table_setup, tab_setup_f_out,         programStruct.setup.f_out);
-  ModbusSS_SetWord(&mdb_table_setup, tab_setup_U_out,         programStruct.setup.U_out);
-  ModbusSS_SetWord(&mdb_table_setup, tab_setup_PWM_freq,      programStruct.setup.PWM_freq);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_protect,       program.setup.protect_control);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_phase_count,   program.setup.phaseCount);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_f_out,         program.setup.f_out);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_U_out,         program.setup.U_out);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_PWM_freq,      program.setup.PWM_freq);
 
   StartIdx = tab_setup_RegU_kp_phase_0;
   StopIdx  = tab_setup_RegU_kp_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i,          programStruct.setup.RegU_kp[i]*kMul_1000);
+    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i,          program.setup.RegU_kp[i]*kMul_1000);
   }
 
   StartIdx = tab_setup_RegU_ki_phase_0;
   StopIdx  = tab_setup_RegU_ki_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i,          programStruct.setup.RegU_ki[i]*kMul_1000);
+    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i,          program.setup.RegU_ki[i]*kMul_1000);
   }
 
   StartIdx = tab_setup_RegU_max_phase_0;
   StopIdx  = tab_setup_RegU_max_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i,          programStruct.setup.RegU_max[i]*kMul_1000);
+    ModbusSS_SetWord(&mdb_table_setup, StartIdx + i,          program.setup.RegU_max[i]*kMul_1000);
   }
 
   // REGUL -----------------------------
@@ -276,42 +276,42 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   StopIdx  = tab_regul_u_in_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].In);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     program.control.sau.voltageRegulator[i].In);
   }
 
   StartIdx = tab_regul_u_fb_phase_0;
   StopIdx  = tab_regul_u_fb_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].Fb);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     program.control.sau.voltageRegulator[i].Fb);
   }
 
   StartIdx = tab_regul_u_out_phase_0;
   StopIdx  = tab_regul_u_out_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].Out);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     program.control.sau.voltageRegulator[i].Out);
   }
 
   StartIdx = tab_regul_u_kP_phase_0;
   StopIdx  = tab_regul_u_kP_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].k_P*kMul_1000);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     program.control.sau.voltageRegulator[i].k_P*kMul_1000);
   }
 
   StartIdx = tab_regul_u_kI_phase_0;
   StopIdx  = tab_regul_u_kI_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].k_Int*kMul_1000);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     program.control.sau.voltageRegulator[i].k_Int*kMul_1000);
   }
 
   StartIdx = tab_regul_u_outMax_phase_0;
   StopIdx  = tab_regul_u_outMax_phase_2;
   for (uint8_t i = 0; i < (StopIdx - StartIdx + 1); i++)
   {
-    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     programStruct.control.sau.voltageRegulator[i].OutMax*kMul_1000);
+    ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     program.control.sau.voltageRegulator[i].OutMax*kMul_1000);
   }
 }
 //------------------------ REGULAR FCN END------------------------
@@ -461,7 +461,7 @@ __weak void protocolMbRtuSlaveCtrl_callback_H_WRITE(ModbusSS_table_t *table, uin
       }
       break;
     case tab_setup_protect:
-      programStruct.setup.protect_control = value;
+      program.setup.protect_control = value;
       response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
       break;
     case tab_setup_phase_count:

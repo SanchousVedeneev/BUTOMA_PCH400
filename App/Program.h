@@ -32,10 +32,22 @@ typedef enum{
 //Errors
 typedef enum{
     error_noError = 0,
-    error_Uzpt_L_low,
-    error_Uzpt_L_high,
-    error_Uzpt_R_low,
-    error_Uzpt_L_high
+    error_Udc_L_low,
+    error_Udc_L_high,
+    error_Udc_R_low,
+    error_Udc_R_high,
+    error_Uac_U_no_ok,
+    error_Uac_V_no_ok,
+    error_Uac_W_no_ok,
+    error_Uac_voltageUp,
+    error_Iac_U_overload,
+    error_Iac_V_overload,
+    error_Iac_W_overload,
+    error_Iac_U_KZ,
+    error_Iac_V_KZ,
+    error_Iac_W_KZ,
+    error_Ttv_high,
+    error_Tradiator_high
 }Program_ERROR_typedef;
 
 
@@ -44,8 +56,8 @@ typedef enum{
 #define PRG_DIN_KT_ON (0)
 typedef enum
 {
-	prg_din1_Pusk,        // 0
-	prg_din2_Stop,        // 1
+	prg_din1_Pusk,         // 0
+	prg_din2_Stop,         // 1
 	prg_din3_TV_KT1,       // 2
 	prg_din4_TV_KT2,       // 3
 	prg_din5_UNUSED,       // 4
@@ -58,33 +70,33 @@ typedef enum
 
 typedef enum
 {
-	prg_dout1_LampReady,    // 0
-	prg_dout2_LampWork,    // 1
-	prg_dout3_LampOverheat,    // 2
+	prg_dout1_LampReady,     // 0
+	prg_dout2_LampWork,      // 1
+	prg_dout3_LampOverheat,  // 2
 	prg_dout4_LampFaulth,    // 3
-	prg_dout5_KM1,    // 4
-	prg_dout6_KM2,    // 5
-	prg_dout7_FanPower,    // 6
-	prg_dout8_UNUSED,    // 7
-	prg_dout9_UNUSED,    // 8
-	prg_dout10_UNUSED    // 9
+	prg_dout5_KM1,           // 4
+	prg_dout6_KM2,           // 5
+	prg_dout7_FanPower,      // 6
+	prg_dout8_UNUSED,        // 7
+	prg_dout9_UNUSED,        // 8
+	prg_dout10_UNUSED        // 9
 } Program_dout_typedef;
 
 
-#define PROGRAM_INV_L ((uint8_t)0)
-#define PROGRAM_INV_R ((uint8_t)1)
+#define PROGRAM_INV_L (0)
+#define PROGRAM_INV_R (1)
 
-#define PROGRAM_OUT_U_INV_L ((uint8_t)0)
-#define PROGRAM_OUT_V_INV_L ((uint8_t)1)
-#define PROGRAM_OUT_W_INV_L ((uint8_t)2)
+#define PROGRAM_OUT_U_INV_L (0)
+#define PROGRAM_OUT_V_INV_L (1)
+#define PROGRAM_OUT_W_INV_L (2)
 
-#define PROGRAM_OUT_U_INV_R ((uint8_t)3)
-#define PROGRAM_OUT_V_INV_R ((uint8_t)4)
-#define PROGRAM_OUT_W_INV_R ((uint8_t)5)
+#define PROGRAM_OUT_U_INV_R (3)
+#define PROGRAM_OUT_V_INV_R (4)
+#define PROGRAM_OUT_W_INV_R (5)
 
-#define PROGRAM_FHASE_U ((uint8_t)0)
-#define PROGRAM_FHASE_V ((uint8_t)1)
-#define PROGRAM_FHASE_W ((uint8_t)2)
+#define PROGRAM_FHASE_U (0)
+#define PROGRAM_FHASE_V (1)
+#define PROGRAM_FHASE_W (2)
 
 #define PROGRAM_FHASE_COUNT (3)
 typedef struct           // U1 - U2
@@ -159,8 +171,8 @@ typedef enum{
     prg_analog_U_u,
     prg_analog_U_v,
     prg_analog_U_w,
-    prg_analog_Uzpt_inv_L,
-    prg_analog_Uzpt_inv_R,
+    prg_analog_Udc_invL,
+    prg_analog_Udc_invR,
     prg_analog_AI8,
     prg_analog_AI9,
     prg_analog_AI10
@@ -204,20 +216,26 @@ typedef struct
 */
 typedef struct
 {
-    uint16_t analog_shift[PRG_ANALOG_COUNT];    //+
-    float analog_kMul[PRG_ANALOG_COUNT];        //+
-    uint8_t analog_av_order[PRG_ANALOG_COUNT];  //+
-    uint16_t analog_filter_N[PRG_ANALOG_COUNT]; //+
+    uint16_t analog_shift   [PRG_ANALOG_COUNT]; 
+    float    analog_kMul    [PRG_ANALOG_COUNT]; 
+    uint8_t  analog_av_order[PRG_ANALOG_COUNT]; 
+    uint16_t analog_filter_N[PRG_ANALOG_COUNT];
 
     uint16_t protect_control; // по умолчанию =0
-    uint8_t phaseCount;
+    uint8_t  phaseCount;
     uint16_t f_out;
     uint16_t U_out;
     uint16_t PWM_freq;
 
-    float RegU_kp[PROGRAM_FHASE_COUNT];
-    float RegU_ki[PROGRAM_FHASE_COUNT];
-    float RegU_max[PROGRAM_FHASE_COUNT];
+    float    RegU_kp[PROGRAM_FHASE_COUNT];
+    float    RegU_ki[PROGRAM_FHASE_COUNT];
+    float    RegU_max[PROGRAM_FHASE_COUNT];
+
+    uint16_t Udc_low;         // V
+    uint16_t Udc_high;        // V
+    uint16_t Uac_no_ok;       // %
+    uint16_t Iac_nominal;     // A
+    uint16_t Tradiator_high   // C
 
 } Program_PARAM_typedef;
 

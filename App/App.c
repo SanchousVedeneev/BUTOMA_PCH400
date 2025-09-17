@@ -36,6 +36,8 @@ void app_main(void)
 static void app_hardware_init(void)
 {
   bsp_dInOut_readWrite_hw_start();
+  bsp_fft_init();
+  bsp_cordic_init();
   HAL_Delay(10);
   return;
 }
