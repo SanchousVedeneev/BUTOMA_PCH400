@@ -33,7 +33,6 @@ extern bsp_analogIn_typedef bsp_analogIn_struct;
 #define PROGRAM_I_AC_K_OVERLOAD      (1.3f)
 #define PROGRAM_TIMER_I_AC_OVERLOAD  (10)
 
-
 #define PROGRAM_TIMER_CHECK_UDC (1000)
 #define PROGRAM_TIMER_VOLTAGE_UP (1000)
 #define PROGRAM_TIMER_WAIT_AC_OK (3000)
@@ -139,7 +138,7 @@ __STATIC_INLINE void __stepVoltageUp()
         {
             Program_setError(error_Udc_R_low);
         }
-        else if (program.analog.aIn[prg_analog_Udc_invR].value > program.setup.Udc_high)
+        if (program.analog.aIn[prg_analog_Udc_invR].value > program.setup.Udc_high)
         {
             Program_setError(error_Udc_R_high);
         }
@@ -253,9 +252,9 @@ __STATIC_INLINE void __stepVoltageUp()
             }
         }
     }
-    timerWaitAcOk[0] = 0;
-    timerWaitAcOk[1] = 0;
-    timerWaitAcOk[2] = 0;
+    timerWaitAcOk[PROGRAM_FHASE_U] = 0;
+    timerWaitAcOk[PROGRAM_FHASE_V] = 0;
+    timerWaitAcOk[PROGRAM_FHASE_W] = 0;
     timerVoltageUp = 0;
 
     // Switch
@@ -358,23 +357,23 @@ __STATIC_INLINE void __stepWork()
         Program_setError(error_Iac_W_KZ);
     }
 
-    Utemp = program.analog.aIn[prg_analog_I_u].value;
-    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok)) ||
-        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok)))
+    Utemp = program.analog.aIn[prg_analog_U_u].value;
+    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok_percent)) ||
+        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok_percent)))
     {
         Program_setError(error_Uac_U_no_ok);
     }
 
-    Utemp = program.analog.aIn[prg_analog_I_v].value;
-    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok)) ||
-        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok)))
+    Utemp = program.analog.aIn[prg_analog_U_v].value;
+    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok_percent)) ||
+        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok_percent)))
     {
         Program_setError(error_Uac_V_no_ok);
     }
 
-    Utemp = program.analog.aIn[prg_analog_I_w].value;
-    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok)) ||
-        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok)))
+    Utemp = program.analog.aIn[prg_analog_U_w].value;
+    if ((Utemp < Utemp * (1.0f - program.setup.Uac_no_ok_percent)) ||
+        (Utemp > Utemp * (1.0f + program.setup.Uac_no_ok_percent)))
     {
         Program_setError(error_Uac_W_no_ok);
     }
@@ -383,6 +382,15 @@ __STATIC_INLINE void __stepWork()
         (bsp_analogIn_struct.currentTemp[1] > program.setup.Tradiator_high))
     {
         Program_setError(error_Tradiator_high);
+    }
+
+    if (Program_checkDin(prg_din3_TV_KT1) == PRG_DIN_KT_ON)
+    {
+        Program_setError(error_Ttv_high);
+    }
+    if (Program_checkDin(prg_din4_TV_KT2) == PRG_DIN_KT_ON)
+    {
+        Program_setError(error_Ttv_high);
     }
     
     // Regulator
@@ -408,8 +416,6 @@ __STATIC_INLINE void __stepWork()
 }
 __STATIC_INLINE void __stepStop()
 {
-    // @do 
-    // подумать, что еще можно сюда дописать
     Program_pwmOutsControl(bsp_pwm_outs_group_123, PROGRAM_PWM_OFF);
     Program_pwmOutsControl(bsp_pwm_outs_group_456, PROGRAM_PWM_OFF);
 
@@ -684,13 +690,12 @@ void Program_ParamSetToDefault()
         program.setup.RegU_max[phase] = 1.0f;
     }
 
-    // @do
     // уставки для формирования аварий
-    program.setup.Udc_low        = 800;     // V
-    program.setup.Udc_high       = 1030;    // V
-    program.setup.Uac_no_ok      = 10;      // %
-    program.setup.Iac_nominal    = 40;      // A
-    program.setup.Tradiator_high = 85;      // C
+    program.setup.Udc_low           = 800;     // V
+    program.setup.Udc_high          = 1030;    // V
+    program.setup.Uac_no_ok_percent = 10;      // %
+    program.setup.Iac_nominal       = 40;      // A
+    program.setup.Tradiator_high    = 85;      // C
 
     return;
 }
@@ -994,6 +999,48 @@ uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max)
     program.setup.RegU_max[phase_idx] = uOut_max;
     return 1;
 
+}
+
+#define PROGRAM_UAC_PERCENT_NO_OK_MIN (0.01f)
+#define PROGRAM_UAC_PERCENT_NO_OK_MAX (0.15f)
+uint8_t Program_set_Uac_no_ok_percent (float Uac_no_ok_percent)
+{
+    if (program.control.step != step_debug)
+    {
+        return 0;
+    }
+
+    if (Uac_no_ok_percent <= PROGRAM_UAC_PERCENT_NO_OK_MIN)
+    {
+        Uac_no_ok_percent = PROGRAM_UAC_PERCENT_NO_OK_MIN;
+    }
+    else if (Uac_no_ok_percent >= PROGRAM_UAC_PERCENT_NO_OK_MAX)
+    {
+        Uac_no_ok_percent = PROGRAM_UAC_PERCENT_NO_OK_MAX;
+    }
+    program.setup.Uac_no_ok_percent = Uac_no_ok_percent;
+    return 1;
+}
+
+#define PROGRAM_IAC_NOMINAL_MIN (20)
+#define PROGRAM_IAC_NOMINAL_MAX (50)
+uint8_t Program_set_Iac_nominal (uint16_t Iac_nominal)
+{
+    if (program.control.step != step_debug)
+    {
+        return 0;
+    }
+
+    if (Iac_nominal <= PROGRAM_IAC_NOMINAL_MIN)
+    {
+        Iac_nominal = PROGRAM_IAC_NOMINAL_MIN;
+    }
+    else if (Iac_nominal >= PROGRAM_IAC_NOMINAL_MAX)
+    {
+        Iac_nominal = PROGRAM_IAC_NOMINAL_MAX;
+    }
+    program.setup.Iac_nominal = Iac_nominal;
+    return 1;
 }
 
 __INLINE uint8_t Program_GoReset()

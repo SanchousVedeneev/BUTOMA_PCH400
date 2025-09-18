@@ -194,7 +194,6 @@ typedef struct
     uint16_t currentIdx;
 } Program_SIN_typedef;
 
-
 typedef struct
 {
     Program_STEP_typedef step; // Current step (dc charge, work ...)
@@ -231,14 +230,12 @@ typedef struct
     float    RegU_ki[PROGRAM_FHASE_COUNT];
     float    RegU_max[PROGRAM_FHASE_COUNT];
 
-    uint16_t Udc_low;         // V
-    uint16_t Udc_high;        // V
-    uint16_t Uac_no_ok;       // %
-    uint16_t Iac_nominal;     // A
-    uint16_t Tradiator_high   // C
-
+    uint16_t Udc_low;           // V
+    uint16_t Udc_high;          // V
+    float    Uac_no_ok_percent; // %
+    uint16_t Iac_nominal;       // A
+    uint16_t Tradiator_high;    // C
 } Program_PARAM_typedef;
-
 
 typedef struct
 {
@@ -283,6 +280,8 @@ uint8_t Program_set_regul_ki (uint8_t phase_idx, float ki);
 uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max);
 uint8_t Program_set_ZI (uint8_t ZI);
 
+uint8_t Program_set_Uac_no_ok_percent (float Uac_no_ok);
+uint8_t Program_set_Iac_nominal (uint16_t Iac_nominal);
 
 void Program_sinBuf_init();
 void Program_phase_init();

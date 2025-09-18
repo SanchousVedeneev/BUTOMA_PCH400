@@ -79,17 +79,23 @@ enum mdb_table_setup
   tab_setup_analog_av_order_10 = 1332,   // 1332
   tab_setup_analog_filter_N_0  = 1333,   // 1333
   tab_setup_analog_filter_N_10 = 1343,   // 1343
-  tab_setup_protect,                     // 1344
-  tab_setup_phase_count,                 // 1345
-  tab_setup_f_out,                       // 1346
-  tab_setup_U_out,                       // 1347
-  tab_setup_PWM_freq,                    // 1348
+  tab_setup_protect            = 1344,   // 1344
+  tab_setup_phase_count        = 1345,   // 1345
+  tab_setup_f_out              = 1346,   // 1346
+  tab_setup_U_out              = 1347,   // 1347
+  tab_setup_PWM_freq           = 1348,   // 1348
   tab_setup_RegU_kp_phase_0    = 1349,   // 1349
   tab_setup_RegU_kp_phase_2    = 1351,   // 1351
   tab_setup_RegU_ki_phase_0    = 1352,   // 1352
   tab_setup_RegU_ki_phase_2    = 1354,   // 1354
   tab_setup_RegU_max_phase_0   = 1355,   // 1355
-  tab_setup_RegU_max_phase_2   = 1357    // 1357
+  tab_setup_RegU_max_phase_2   = 1357,   // 1357
+  tab_setup_Udc_low            = 1358,   // 1358
+  tab_setup_Udc_high           = 1359,   // 1359
+  tab_setup_Uac_no_ok_percent  = 1360,   // 1360
+  tab_setup_Iac_nominal        = 1361,   // 1361
+  tab_setup_Tradiator_high     = 1362    // 1362
+
 };
 #define MDB_SETUP_BUF_COUNT (tab_setup_RegU_max_phase_2 - MDB_TABLE_SETUP_REG_NO + 1)
 uint16_t mdb_setup_buf[MDB_SETUP_BUF_COUNT];
@@ -173,6 +179,7 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   // BSP -----------------------------
   uint16_t regNo = MDB_TABLE_BSP_REG_NO;
   float kMul_1000 = 1000.0f;
+  float kMul_100  = 100.0f;
 
   ModbusSS_SetWord(&mdb_table_bsp, regNo++, bsp_dInOut_struct.in.w16); // 1000
   for (uint8_t i = 0; i < 3; i++)
@@ -271,6 +278,12 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
     ModbusSS_SetWord(&mdb_table_setup, StartIdx + i,          program.setup.RegU_max[i]*kMul_1000);
   }
 
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_Udc_low,           program.setup.Udc_low);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_Udc_high,          program.setup.Udc_high);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_Uac_no_ok_percent, program.setup.Uac_no_ok_percent*kMul_100);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_Iac_nominal,       program.setup.Iac_nominal);
+  ModbusSS_SetWord(&mdb_table_setup, tab_setup_Tradiator_high,    program.setup.Tradiator_high);
+
   // REGUL -----------------------------
   StartIdx = tab_regul_u_in_phase_0;
   StopIdx  = tab_regul_u_in_phase_2;
@@ -313,6 +326,7 @@ __INLINE void protocolMbRtuSlaveCtrl_update_tables()
   {
     ModbusSS_SetWord(&mdb_table_regul, StartIdx + i,     program.control.sau.voltageRegulator[i].OutMax*kMul_1000);
   }
+
 }
 //------------------------ REGULAR FCN END------------------------
 
@@ -327,6 +341,7 @@ __weak void protocolMbRtuSlaveCtrl_callback_H_WRITE(ModbusSS_table_t *table, uin
   int16_t sign_val = 0;
   uint8_t idx = 0;
   float kMul_0_001 = 0.001f;
+  float kMul_0_01  = 0.01f;
   asm("NOP");
 
   if (table == &mdb_table_program) // Диапазон PROGRAM
@@ -465,36 +480,75 @@ __weak void protocolMbRtuSlaveCtrl_callback_H_WRITE(ModbusSS_table_t *table, uin
       response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
       break;
     case tab_setup_phase_count:
-      Program_set_phaseCount_debug(value);
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (Program_set_phaseCount_debug(value))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_f_out:
-      Program_set_fOut_debug(value);
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (Program_set_fOut_debug(value))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_U_out:
-      Program_set_uOut_debug(value);
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (Program_set_uOut_debug(value))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_PWM_freq:
-      Program_set_PWM_freq_debug(value);
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (Program_set_PWM_freq_debug(value))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_RegU_kp_phase_0 ... tab_setup_RegU_kp_phase_2:
       idx = reg - tab_setup_RegU_kp_phase_0;
-      Program_set_regul_kp(idx, value*kMul_0_001);
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (Program_set_regul_kp(idx, value*kMul_0_001))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_RegU_ki_phase_0 ... tab_setup_RegU_ki_phase_2:
       idx = reg - tab_setup_RegU_ki_phase_0;
-      Program_set_regul_ki(idx, value*kMul_0_001);
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (Program_set_regul_ki(idx, value*kMul_0_001))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_RegU_max_phase_0 ... tab_setup_RegU_max_phase_2:
       idx = reg - tab_setup_RegU_max_phase_0;
-      Program_set_regul_uOut_max(idx, value*kMul_0_001);
+      if (Program_set_regul_uOut_max(idx, value*kMul_0_001))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
+      break;
+    case tab_setup_Udc_low:
+      program.setup.Udc_low = value;
       response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
       break;
+    case tab_setup_Udc_high:
+      program.setup.Udc_high = value;
+      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      break;
+    case tab_setup_Uac_no_ok_percent:
+      if (Program_set_Uac_no_ok_percent((float)value*kMul_0_01))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
+      break;
+    case tab_setup_Iac_nominal:
+      if (Program_set_Iac_nominal(value))
+      {
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
+      break;      
+    case tab_setup_Tradiator_high:
+      program.setup.Tradiator_high = value;
+      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      break;
+
     default:
       response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_FAIL;
       break;
