@@ -693,7 +693,7 @@ void Program_ParamSetToDefault()
     // уставки для формирования аварий
     program.setup.Udc_low           = 800;     // V
     program.setup.Udc_high          = 1030;    // V
-    program.setup.Uac_no_ok_percent = 10;      // %
+    program.setup.Uac_no_ok_percent = 0.10f;   // %
     program.setup.Iac_nominal       = 40;      // A
     program.setup.Tradiator_high    = 85;      // C
 
@@ -1001,7 +1001,7 @@ uint8_t Program_set_regul_uOut_max (uint8_t phase_idx, float uOut_max)
 
 }
 
-#define PROGRAM_UAC_PERCENT_NO_OK_MIN (0.01f)
+#define PROGRAM_UAC_PERCENT_NO_OK_MIN (0.05f)
 #define PROGRAM_UAC_PERCENT_NO_OK_MAX (0.15f)
 uint8_t Program_set_Uac_no_ok_percent (float Uac_no_ok_percent)
 {
@@ -1023,7 +1023,7 @@ uint8_t Program_set_Uac_no_ok_percent (float Uac_no_ok_percent)
 }
 
 #define PROGRAM_IAC_NOMINAL_MIN (20)
-#define PROGRAM_IAC_NOMINAL_MAX (50)
+#define PROGRAM_IAC_NOMINAL_MAX (60)
 uint8_t Program_set_Iac_nominal (uint16_t Iac_nominal)
 {
     if (program.control.step != step_debug)

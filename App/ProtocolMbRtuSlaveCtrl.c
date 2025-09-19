@@ -97,7 +97,7 @@ enum mdb_table_setup
   tab_setup_Tradiator_high     = 1362    // 1362
 
 };
-#define MDB_SETUP_BUF_COUNT (tab_setup_RegU_max_phase_2 - MDB_TABLE_SETUP_REG_NO + 1)
+#define MDB_SETUP_BUF_COUNT (tab_setup_Tradiator_high - MDB_TABLE_SETUP_REG_NO + 1)
 uint16_t mdb_setup_buf[MDB_SETUP_BUF_COUNT];
 ModbusSS_table_t mdb_table_setup = 
 {
@@ -476,8 +476,11 @@ __weak void protocolMbRtuSlaveCtrl_callback_H_WRITE(ModbusSS_table_t *table, uin
       }
       break;
     case tab_setup_protect:
-      program.setup.protect_control = value;
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (program.control.step == step_debug)
+      {
+        program.setup.protect_control = value;
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_phase_count:
       if (Program_set_phaseCount_debug(value))
@@ -525,12 +528,18 @@ __weak void protocolMbRtuSlaveCtrl_callback_H_WRITE(ModbusSS_table_t *table, uin
       }
       break;
     case tab_setup_Udc_low:
-      program.setup.Udc_low = value;
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (program.control.step == step_debug)
+      {
+        program.setup.Udc_low = value;
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_Udc_high:
-      program.setup.Udc_high = value;
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (program.control.step == step_debug)
+      {
+        program.setup.Udc_high = value;
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
     case tab_setup_Uac_no_ok_percent:
       if (Program_set_Uac_no_ok_percent((float)value*kMul_0_01))
@@ -545,8 +554,11 @@ __weak void protocolMbRtuSlaveCtrl_callback_H_WRITE(ModbusSS_table_t *table, uin
       }
       break;      
     case tab_setup_Tradiator_high:
-      program.setup.Tradiator_high = value;
-      response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      if (program.control.step == step_debug)
+      {
+        program.setup.Tradiator_high = value;
+        response = PROTOCOL_MB_RTU_SLAVE_CTRL_CMD_OK;
+      }
       break;
 
     default:
